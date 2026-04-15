@@ -10,12 +10,6 @@ from custom_components.myhome.const import DOMAIN
 
 async def test_form(hass: HomeAssistant) -> None:
     """Test we get the form and create an entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"] is None
-
     with patch(
         "custom_components.myhome.ownd.connection.OWNSession.test_gateway",
         return_value={"Success": True},
@@ -26,6 +20,12 @@ async def test_form(hass: HomeAssistant) -> None:
         "custom_components.myhome.config_flow.find_gateways",
         return_value=[]
     ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["errors"] is None
+
         result2 = await hass.config_entries.flow.async_configure(
             result["step_id"],
             {
@@ -49,10 +49,6 @@ async def test_form(hass: HomeAssistant) -> None:
 
 async def test_form_cannot_connect(hass: HomeAssistant) -> None:
     """Test we handle cannot connect error."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-
     with patch(
         "custom_components.myhome.ownd.connection.OWNSession.test_gateway",
         return_value={"Success": False, "Message": "connection_refused"},
@@ -60,6 +56,10 @@ async def test_form_cannot_connect(hass: HomeAssistant) -> None:
         "custom_components.myhome.config_flow.find_gateways",
         return_value=[]
     ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
         result2 = await hass.config_entries.flow.async_configure(
             result["step_id"],
             {

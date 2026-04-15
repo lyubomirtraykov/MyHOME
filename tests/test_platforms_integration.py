@@ -38,7 +38,16 @@ async def test_platforms_setup_and_unload(hass: HomeAssistant, mock_gateway_conn
             "host": "192.168.0.35",
             "port": 20000,
             "password": "pass",
-            "mac": "00:03:50:00:12:34"
+            "mac": "00:03:50:00:12:34",
+            "ssdp_location": "http://192.168.0.35:49153/description.xml",
+            "ssdp_st": "urn:schemas-upnp-org:device:Basic:1",
+            "deviceType": "urn:schemas-upnp-org:device:Basic:1",
+            "friendlyName": "MyHOME Gateway",
+            "manufacturer": "BTicino",
+            "manufacturerURL": "http://www.bticino.com",
+            "name": "F454",
+            "firmware": "2.0.0",
+            "udn": "uuid:12345678-1234-1234-1234-123456789012"
         },
         unique_id="00:03:50:00:12:34",
     )
@@ -66,7 +75,16 @@ async def test_platform_dynamic_discovery(hass: HomeAssistant, mock_gateway_conn
             "host": "192.168.0.35",
             "port": 20000,
             "password": "pass",
-            "mac": "00:03:50:00:12:34"
+            "mac": "00:03:50:00:12:34",
+            "ssdp_location": "http://192.168.0.35:49153/description.xml",
+            "ssdp_st": "urn:schemas-upnp-org:device:Basic:1",
+            "deviceType": "urn:schemas-upnp-org:device:Basic:1",
+            "friendlyName": "MyHOME Gateway",
+            "manufacturer": "BTicino",
+            "manufacturerURL": "http://www.bticino.com",
+            "name": "F454",
+            "firmware": "2.0.0",
+            "udn": "uuid:12345678-1234-1234-1234-123456789012"
         },
         unique_id="00:03:50:00:12:34",
     )
