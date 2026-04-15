@@ -40,7 +40,6 @@ class TestLightEntity:
         l = MyHOMELight(
             hass=mock_hass,
             name="Light 1",
-            entity_name="Light 1",
             device_id="1#21",
             who="1",
             where="21",
@@ -89,7 +88,6 @@ class TestSwitchEntity:
         s = MyHOMESwitch(
             hass=mock_hass,
             name="Switch 1",
-            entity_name="Switch 1",
             device_id="1#22",
             who="1",
             where="22",
@@ -141,7 +139,6 @@ class TestCoverEntity:
         c = MyHOMECover(
             hass=mock_hass,
             name="Cover 1",
-            entity_name="Cover 1",
             device_id="2#23",
             who="2",
             where="23",
@@ -201,7 +198,6 @@ class TestButtonEntity:
         b = EnableCommandButtonEntity(
             hass=mock_hass,
             name="Enable Button",
-            entity_name="Enable Button",
             device_id="25#24",
             who="25",
             where="24",

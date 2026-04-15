@@ -46,7 +46,6 @@ class TestClimateEntity:
         c = MyHOMEClimate(
             hass=mock_hass,
             name="Climate 1",
-            entity_name="Climate 1",
             device_id="4#01",
             who="4",
             zone="01",
@@ -118,7 +117,6 @@ class TestBinarySensorEntity:
         s = MyHOMEDryContactBinarySensor(
             hass=mock_hass,
             name="Door",
-            entity_name="Door",
             device_id="25#31",
             who="25",
             where="31",
@@ -150,7 +148,6 @@ class TestSensorEntity:
         s = MyHOMEPowerSensor(
             hass=mock_hass,
             name="Power",
-            entity_name="Power",
             device_id="18#51",
             who="18",
             where="51",
@@ -177,10 +174,12 @@ class TestSensorEntity:
 
 class TestGatewayConnection:
     @pytest.mark.asyncio
-    async def test_test_connection_dns_failure(self):
+    async def test_test_connection_dns_failure(self, mock_gateway):
         from custom_components.myhome.ownd.connection import OWNSession
         with patch("asyncio.open_connection", side_effect=OSError("DNS fail")):
-            session = OWNSession(address="invalid_host", port=20000, password="123")
+            mock_gateway.address = "invalid_host"
+            mock_gateway.port = 20000
+            session = OWNSession(gateway=mock_gateway)
             response = await session.test_connection()
             assert response["Success"] is False
             assert response["Message"] == "connection_refused"
