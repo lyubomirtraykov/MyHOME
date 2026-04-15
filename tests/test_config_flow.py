@@ -222,9 +222,10 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         data={
             "host": "192.168.1.135",
             "password": "pass",
+            "mac": "00:03:50:00:12:34",
         },
         options={
-            "worker_count": 1,
+            "command_worker_count": 1,
             "generate_events": False,
         },
     )
@@ -249,7 +250,7 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     )
 
     assert result2["type"] == FlowResultType.CREATE_ENTRY
-    assert entry.options["worker_count"] == 3
+    assert entry.options["command_worker_count"] == 3
     assert entry.options["generate_events"] is True
     assert entry.data["host"] == "192.168.1.136"
     assert entry.data["password"] == "new_password"
