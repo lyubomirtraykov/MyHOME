@@ -58,7 +58,8 @@ def mock_config_entry():
 
 @pytest.fixture
 def gateway_handler(mock_config_entry):
-    mock_hass = MagicMock(spec=HomeAssistant)
+    mock_hass = MagicMock()
+    mock_hass.data = {}
     handler = MyHOMEGatewayHandler(mock_hass, mock_config_entry)
     # The bus and async_fire are automatically MagicMocks now.
     return handler
@@ -229,19 +230,13 @@ async def test_sending_loop(gateway_handler):
 
         gateway_handler.sending_workers = [AsyncMock()]
         
-        # Add a task
-        await gateway_handler.send_buffer.put({"message": "mock_msg", "is_status_request": False})
-
-        # Inject a task to kill the loop cleanly
-        async def kill_loop():
-            gateway_handler._terminate_sender = True
-            return {"message": "kill", "is_status_request": False}
-
-        # Override get to yield one message then kill loop
-        gateway_handler.send_buffer.get = AsyncMock(side_effect=[
+        # Replace the real queue with a mock to avoid task_done() internal tracking errors
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[
             {"message": "msg1", "is_status_request": False},
             {"message": "msg2", "is_status_request": True},
         ])
+        gateway_handler.send_buffer = mock_queue
 
         # Hook to end the while loop manually without causing infinite hangs
         def mock_send(message, is_status_request):
