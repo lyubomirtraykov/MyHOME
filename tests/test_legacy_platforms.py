@@ -32,8 +32,10 @@ def mock_gateway_connection():
         yield mock_send, mock_req
 
 
-async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_gateway_connection):
+async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_gateway_connection, caplog):
     """Test legacy platforms logic instantiated via fallback CONF_PLATFORMS."""
+    import logging
+    caplog.set_level(logging.DEBUG)
     mac_addr = "00:03:50:00:12:35"
     mock_send, mock_req = mock_gateway_connection
     
@@ -97,7 +99,10 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     )
     config_entry.add_to_hass(hass)
 
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    success = await hass.config_entries.async_setup(config_entry.entry_id)
+    if not success:
+        raise Exception(f"ASYNC SETUP FAILED!\nCAPLOG:\n{caplog.text}")
+    assert success
     await hass.async_block_till_done()
 
     # Hit Switch turn_on and turn_off coverage
