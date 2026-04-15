@@ -70,7 +70,8 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
                 "sens_1": {
                     CONF_WHO: "1", CONF_WHERE: "1", CONF_NAME: "Sensor 1",
                     CONF_ENTITY_NAME: "Sensor 1", CONF_DEVICE_CLASS: "power",
-                    CONF_MANUFACTURER: "B", CONF_DEVICE_MODEL: "M"
+                    CONF_MANUFACTURER: "B", CONF_DEVICE_MODEL: "M",
+                    CONF_ENTITIES: {}
                 }
             },
             "button": {
