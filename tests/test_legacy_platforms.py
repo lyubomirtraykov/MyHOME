@@ -3,14 +3,16 @@ import pytest
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
-from homeassistant.const import (CONF_MAC, CONF_NAME, CONF_DEVICE_CLASS)
+from homeassistant.const import (CONF_MAC, CONF_NAME, CONF_DEVICE_CLASS, CONF_HOST, CONF_PORT, CONF_PASSWORD)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import (
     DOMAIN, CONF_PLATFORMS, CONF_ENTITIES, CONF_WHO, CONF_WHERE, 
     CONF_ZONE, CONF_ENTITY_NAME, CONF_INVERTED,
     CONF_MANUFACTURER, CONF_DEVICE_MODEL, CONF_HEATING_SUPPORT, CONF_COOLING_SUPPORT,
-    CONF_FAN_SUPPORT, CONF_STANDALONE, CONF_CENTRAL, CONF_ICON, CONF_ICON_ON
+    CONF_FAN_SUPPORT, CONF_STANDALONE, CONF_CENTRAL, CONF_ICON, CONF_ICON_ON,
+    CONF_SSDP_LOCATION, CONF_SSDP_ST, CONF_DEVICE_TYPE, CONF_FRIENDLY_NAME,
+    CONF_MANUFACTURER_URL, CONF_FIRMWARE, CONF_UDN
 )
 from custom_components.myhome.ownd.message import OWNEvent
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -90,18 +92,25 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     config_entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            "host": "192.168.0.35",
-            "port": 20000,
-            "password": "pass",
-            "mac": mac_addr,
+            CONF_HOST: "192.168.0.35",
+            CONF_PORT: 20000,
+            CONF_PASSWORD: "pass",
+            CONF_MAC: mac_addr,
+            CONF_SSDP_LOCATION: "http://192.168.0.35:49153/description.xml",
+            CONF_SSDP_ST: "ssdp:all",
+            CONF_DEVICE_TYPE: "urn:schemas-upnp-org:device:Basic:1",
+            CONF_FRIENDLY_NAME: "MyHOME Gateway",
+            CONF_MANUFACTURER: "BTicino S.p.A.",
+            CONF_MANUFACTURER_URL: "http://www.bticino.it",
+            CONF_NAME: "MyHOME Gateway",
+            CONF_FIRMWARE: "1.0",
+            CONF_UDN: "uuid:1234",
         },
         unique_id=mac_addr,
     )
     config_entry.add_to_hass(hass)
 
     success = await hass.config_entries.async_setup(config_entry.entry_id)
-    if not success:
-        raise Exception(f"ASYNC SETUP FAILED!\nCAPLOG:\n{caplog.text}")
     assert success
     await hass.async_block_till_done()
 
