@@ -35,9 +35,9 @@ async def test_setup_and_unload_entry(hass):
                             "name": "Dry Contact",
                             "entity_name": "Contact 1",
                             "inverted": False,
-                            "device_class": BinarySensorDeviceClass.WINDOW,
+                            "class": BinarySensorDeviceClass.WINDOW,
                             "manufacturer": "B",
-                            "device_model": "M",
+                            "model": "M",
                         },
                         "device_2": {
                             "who": "9",
@@ -45,9 +45,9 @@ async def test_setup_and_unload_entry(hass):
                             "name": "Aux",
                             "entity_name": "Aux 1",
                             "inverted": True,
-                            "device_class": BinarySensorDeviceClass.DOOR,
+                            "class": BinarySensorDeviceClass.DOOR,
                             "manufacturer": "B",
-                            "device_model": "M",
+                            "model": "M",
                         },
                         "device_3": {
                             "who": "1",
@@ -55,9 +55,9 @@ async def test_setup_and_unload_entry(hass):
                             "name": "Motion",
                             "entity_name": "Motion 1",
                             "inverted": False,
-                            "device_class": BinarySensorDeviceClass.MOTION,
+                            "class": BinarySensorDeviceClass.MOTION,
                             "manufacturer": "B",
-                            "device_model": "M",
+                            "model": "M",
                         }
                     }
                 },

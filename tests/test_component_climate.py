@@ -38,13 +38,13 @@ async def test_setup_and_unload_entry(hass):
                             "who": "4",
                             "zone": "1",
                             "name": "Zone 1",
-                            "heating_support": True,
-                            "cooling_support": True,
-                            "fan_support": False,
+                            "heat": True,
+                            "cool": True,
+                            "fan": False,
                             "standalone": True,
                             "central": False,
                             "manufacturer": "BTicino",
-                            "device_model": "F454",
+                            "model": "F454",
                         }
                     }
                 },
@@ -101,13 +101,13 @@ async def test_climate_properties_and_hvac_modes(hass):
     # Test set_hvac_mode OFF
     await climate.async_set_hvac_mode(HVACMode.OFF)
     gateway.send.assert_called_once()
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_OFF
+    assert str(gateway.send.call_args[0][0]) == "*4*303*1##"
     gateway.send.reset_mock()
     
     # Test set_hvac_mode AUTO
     await climate.async_set_hvac_mode(HVACMode.AUTO)
     gateway.send.assert_called_once()
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_AUTO
+    assert str(gateway.send.call_args[0][0]) == "*4*311*1##"
     gateway.send.reset_mock()
     
     # Test set_hvac_mode HEAT
@@ -115,14 +115,14 @@ async def test_climate_properties_and_hvac_modes(hass):
     await climate.async_set_hvac_mode(HVACMode.HEAT)
     gateway.send.assert_called_once()
     # It sends set_temperature with mode HEAT
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_HEAT
-    assert getattr(gateway.send.call_args[0][0], "set_temperature") == 22.0
+    assert str(gateway.send.call_args[0][0]) == "*#4*1*#14*0220*1##"
     gateway.send.reset_mock()
     
     # Test set_hvac_mode COOL
     await climate.async_set_hvac_mode(HVACMode.COOL)
     gateway.send.assert_called_once()
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_COOL
+    # If _target_temperature is set, it will send the set_temperature command for COOL too.
+    assert str(gateway.send.call_args[0][0]) == "*#4*1*#14*0220*2##"
     gateway.send.reset_mock()
 
 async def test_climate_set_temperature(hass):
@@ -150,23 +150,21 @@ async def test_climate_set_temperature(hass):
     climate._attr_hvac_mode = HVACMode.HEAT
     await climate.async_set_temperature(temperature=23.0)
     gateway.send.assert_called_once()
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_HEAT
-    assert getattr(gateway.send.call_args[0][0], "set_temperature") == 23.0
+    assert str(gateway.send.call_args[0][0]) == "*#4*1*#14*0230*1##"
     gateway.send.reset_mock()
     
     # Set temperature when in COOL mode
     climate._attr_hvac_mode = HVACMode.COOL
     await climate.async_set_temperature(temperature=24.0)
     gateway.send.assert_called_once()
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_COOL
-    assert getattr(gateway.send.call_args[0][0], "set_temperature") == 24.0
+    assert str(gateway.send.call_args[0][0]) == "*#4*1*#14*0240*2##"
     gateway.send.reset_mock()
     
     # Set temperature when in AUTO mode
     climate._attr_hvac_mode = HVACMode.AUTO
     await climate.async_set_temperature(temperature=21.0)
     gateway.send.assert_called_once()
-    assert getattr(gateway.send.call_args[0][0], "mode") == CLIMATE_MODE_AUTO
+    assert str(gateway.send.call_args[0][0]) == "*#4*1*#14*0210*3##"
     gateway.send.reset_mock()
 
 async def test_climate_handle_events(hass):

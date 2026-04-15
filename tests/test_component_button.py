@@ -24,7 +24,7 @@ async def test_setup_and_unload_entry(hass):
                             "where": "12",
                             "name": "Light 12",
                             "manufacturer": "BTicino",
-                            "device_model": "F411",
+                            "model": "F411",
                             "entities": {}
                         },
                         "device_2": {
@@ -33,7 +33,7 @@ async def test_setup_and_unload_entry(hass):
                             "interface": "2", # test with bus interface
                             "name": "Light 13",
                             "manufacturer": "BTicino",
-                            "device_model": "F411",
+                            "model": "F411",
                             "entities": {}
                         }
                     }

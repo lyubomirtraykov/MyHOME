@@ -58,8 +58,8 @@ async def test_setup_and_unload_entry(hass):
         entities = async_add_entities.call_args[0][0]
         
         assert len(entities) == 2
-        assert entities[0].device_id == "12"
-        assert entities[1].device_id == "13#4#1"
+        assert entities[0]._device_id == "12"
+        assert entities[1]._device_id == "13#4#1"
     
     assert await async_unload_entry(hass, config_entry)
 
