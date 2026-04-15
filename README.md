@@ -9,10 +9,12 @@ Modernized MyHOME Custom Component for Home Assistant
 ## 🌟 Modernization Features
 
 1. **Fully Dynamic Auto-Discovery (No more YAML!):**
-   The integration has been completely disentangled from file-system based `myhome.yaml` static configurations. Devices are now registered and configured natively through the Home Assistant UI Device Registry. The integration actively queries the OpenWebNet bus to discover all entities.
+   The integration has been completely disentangled from file-system based `myhome.yaml` static configurations. Devices are now registered and configured natively through the Home Assistant UI Device Registry. The integration actively queries the OpenWebNet bus to discover all entities out of the box. Native support for complex **F422 Cross-Bus Routing** (e.g. addresses like `18#4#02`) is also completely handled automatically!
    
 2. **Native Audio System Support (WHO=16):**
-   Full native support for Bticino/MyHome Audio Matrices. Exposes native `media_player` entities for all audio zones with bidirectional state tracking, supporting `turn_on`, `turn_off`, `volume_up/down`, and generic `select_source` integrations routing physical keypad events seamlessly directly to your UI.
+   Full native support for Bticino/MyHome Audio Matrices. Exposes native `media_player` entities for all audio zones with bidirectional state tracking, supporting `turn_on`, `turn_off`, and `select_source`.
+   - **Absolute Volume Tracking:** Full support for `volume_set` parsing and dimension messages (`*#16*where*#1*vol##`), normalizing the 0-31 hardware scale automatically.
+   - **Software Mute Emulation:** Since OpenWebNet lacks a native audio Mute function, this integration fully emulates local muting, keeping physical volume levels accurately cached.
 
 3. **MH200 & Stability Hardening:**
    Resolved the fatal "Listener Death" bugs prevalent in the original library. 
