@@ -67,7 +67,7 @@ class TestSensorsCoverage:
         msg = MagicMock()
         msg.message_type = "main_temperature"
         msg.local_offset = 0
-        msg.temperature = 22.5
+        msg.main_temperature = 22.5
         msg.human_readable_log = "mock temp"
         sensor.handle_event(msg)
         assert sensor._attr_native_value == 22.5
@@ -129,6 +129,10 @@ class TestBinarySensorsCoverage:
             gateway=mock_gateway
         )
         sensor.async_schedule_update_ha_state = MagicMock()
-        msg = MagicMock(is_on=True, human_readable_log="m")
+        sensor.async_write_ha_state = MagicMock()
+        msg = MagicMock()
+        msg.message_type = "motion"
+        msg.motion = True
+        msg.human_readable_log = "m"
         sensor.handle_event(msg)
         assert sensor._attr_is_on is True
