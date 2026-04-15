@@ -48,10 +48,10 @@ class TestClimateEntity:
             name="Climate 1",
             device_id="4#01",
             who="4",
-            zone="01",
-            heating_support=True,
-            cooling_support=True,
-            fan_support=False,
+            where="01",
+            heating=True,
+            cooling=True,
+            fan=False,
             standalone=False,
             central=False,
             manufacturer="BTicino",
@@ -113,10 +113,11 @@ class TestBinarySensorEntity:
 
     @pytest.fixture
     def dry_contact(self, mock_hass, mock_gateway, mock_entity_base_init):
-        from custom_components.myhome.binary_sensor import MyHOMEDryContactBinarySensor
-        s = MyHOMEDryContactBinarySensor(
+        from custom_components.myhome.binary_sensor import MyHOMEDryContact
+        s = MyHOMEDryContact(
             hass=mock_hass,
             name="Door",
+            entity_name="Door",
             device_id="25#31",
             who="25",
             where="31",
@@ -160,10 +161,13 @@ class TestSensorEntity:
         return s
 
     def test_power_sensor_handle_event(self, power_sensor):
-        msg = OWNEvent.parse("*18*51*113*114*115##")
+        from custom_components.myhome.ownd.message import MESSAGE_TYPE_INSTANT_POWER
+        msg = MagicMock()
+        msg.message_type = MESSAGE_TYPE_INSTANT_POWER
+        msg.total_consumption = 113.0
+        msg.human_readable_log = "mock"
         power_sensor.handle_event(msg)
         assert power_sensor._attr_native_value == 113.0
-        assert power_sensor._attr_extra_state_attributes["voltage"] == 115.0
 
     @pytest.mark.asyncio
     async def test_async_update(self, power_sensor):

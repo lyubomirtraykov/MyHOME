@@ -40,9 +40,14 @@ class TestLightEntity:
         l = MyHOMELight(
             hass=mock_hass,
             name="Light 1",
+            entity_name="Light 1",
+            icon="mdi:lightbulb",
+            icon_on="mdi:lightbulb-on",
             device_id="1#21",
             who="1",
             where="21",
+            interface="l",
+            dimmable=False,
             manufacturer="BTicino",
             model="Dimmer",
             gateway=mock_gateway,
@@ -88,9 +93,11 @@ class TestSwitchEntity:
         s = MyHOMESwitch(
             hass=mock_hass,
             name="Switch 1",
+            entity_name="Switch 1",
             device_id="1#22",
             who="1",
             where="22",
+            interface="s",
             device_class="switch",
             icon="mdi:flash",
             icon_on="mdi:flash",
@@ -139,15 +146,15 @@ class TestCoverEntity:
         c = MyHOMECover(
             hass=mock_hass,
             name="Cover 1",
+            entity_name="Cover 1",
             device_id="2#23",
             who="2",
             where="23",
-            device_class="blind",
+            interface="c",
+            advanced=False,
             manufacturer="BTicino",
             model="Blind Actuator",
             gateway=mock_gateway,
-            time_up=20,
-            time_down=20,
         )
         c.async_schedule_update_ha_state = MagicMock()
         return c
@@ -197,14 +204,15 @@ class TestButtonEntity:
         from custom_components.myhome.button import EnableCommandButtonEntity
         b = EnableCommandButtonEntity(
             hass=mock_hass,
+            platform="button",
             name="Enable Button",
             device_id="25#24",
             who="25",
             where="24",
+            interface="b",
             manufacturer="B",
             model="M",
             gateway=mock_gateway,
-            icon="mdi:button",
         )
         b.async_schedule_update_ha_state = MagicMock()
         return b
