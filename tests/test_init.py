@@ -121,7 +121,7 @@ async def test_services(hass: HomeAssistant):
         await hass.config_entries.async_setup(config_entry.entry_id)
         await hass.async_block_till_done()
 
-        gateway = hass.data[DOMAIN]["00:03:50:00:12:34"]["gateway"]
+        gateway = hass.data[DOMAIN]["00:03:50:00:12:34"]["entity"]
         gateway.send = AsyncMock()
 
         # Test sync_time service

@@ -241,10 +241,10 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     result2 = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
-            "worker_count": 3,
+            "command_worker_count": 3,
             "generate_events": True,
             "address": "192.168.1.136",
-            "own_password": "new_password"
+            "password": "new_password"
         },
     )
 
@@ -258,10 +258,10 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     result_invalid = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
-            "worker_count": 3,
+            "command_worker_count": 3,
             "generate_events": True,
             "address": "invalid_ip",
-            "own_password": "new_password"
+            "password": "new_password"
         },
     )
     assert result_invalid["type"] == FlowResultType.FORM
@@ -270,7 +270,13 @@ async def test_options_flow(hass: HomeAssistant) -> None:
 
 async def test_ssdp_discovery(hass: HomeAssistant) -> None:
     """Test SSDP discovery flow."""
-    from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
+    class SsdpServiceInfo:
+        def __init__(self, ssdp_usn, ssdp_st, ssdp_location, upnp, ssdp_headers):
+            self.ssdp_usn = ssdp_usn
+            self.ssdp_st = ssdp_st
+            self.ssdp_location = ssdp_location
+            self.upnp = upnp
+            self.ssdp_headers = ssdp_headers
 
     ssdp_info = SsdpServiceInfo(
         ssdp_usn="mock_usn",
@@ -341,7 +347,7 @@ async def test_reauth_flow(hass: HomeAssistant) -> None:
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {"own_password": "correct_password"},
+            {"password": "correct_password"},
         )
 
     assert result2["type"] == FlowResultType.ABORT
@@ -384,7 +390,7 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
         # 2nd attempt: password error
         result4 = await hass.config_entries.flow.async_configure(
             result3["flow_id"],
-            {"own_password": "wrong_password"}
+            {"password": "wrong_password"}
         )
         assert result4["type"] == FlowResultType.FORM
         assert result4["step_id"] == "password"
@@ -393,6 +399,6 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
         # 3rd attempt: successful setup
         result5 = await hass.config_entries.flow.async_configure(
             result4["flow_id"],
-            {"own_password": "correct_password"}
+            {"password": "correct_password"}
         )
         assert result5["type"] == FlowResultType.CREATE_ENTRY
