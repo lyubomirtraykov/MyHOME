@@ -131,3 +131,83 @@ async def test_form_already_configured(hass: HomeAssistant) -> None:
 
     assert result3["type"] == FlowResultType.ABORT
     assert result3["reason"] == "already_configured"
+
+
+async def test_form_discovery(hass: HomeAssistant) -> None:
+    """Test user selecting a discovered gateway."""
+    mock_discovery = {
+        "00:03:50:00:12:34": {
+            "address": "192.168.1.135",
+            "port": 20000,
+            "serialNumber": "00:03:50:00:12:34",
+            "modelName": "F454"
+        }
+    }
+    with patch(
+        "custom_components.myhome.config_flow.find_gateways",
+        return_value=[mock_discovery["00:03:50:00:12:34"]]
+    ), patch(
+        "custom_components.myhome.config_flow.OWNSession.test_connection",
+        return_value={"Success": True},
+    ), patch(
+        "custom_components.myhome.async_setup_entry",
+        return_value=True,
+    ) as mock_setup_entry:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "user"
+
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"serial": "00:03:50:00:12:34"},
+        )
+        await hass.async_block_till_done()
+
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert "F454" in result2["title"]
+    assert len(mock_setup_entry.mock_calls) == 1
+
+
+async def test_form_discovery_already_configured(hass: HomeAssistant) -> None:
+    """Test aborting when a discovered gateway is already selected."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.135",
+            "port": 20000,
+            "mac": "00:03:50:00:12:34",
+        },
+        unique_id="00:03:50:00:12:34",
+    )
+    entry.add_to_hass(hass)
+
+    mock_discovery = {
+        "00:03:50:00:12:34": {
+            "address": "192.168.1.135",
+            "port": 20000,
+            "serialNumber": "00:03:50:00:12:34",
+            "modelName": "F454"
+        }
+    }
+    with patch(
+        "custom_components.myhome.config_flow.find_gateways",
+        return_value=[mock_discovery["00:03:50:00:12:34"]]
+    ), patch(
+        "custom_components.myhome.config_flow.OWNSession.test_connection",
+        return_value={"Success": True},
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        # Note: if it's already configured, the flow filters it from dropdown, but if manually passed:
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"serial": "00:03:50:00:12:34"},
+        )
+
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "already_configured"

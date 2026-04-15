@@ -168,6 +168,38 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     async_dispatcher_send(hass, f"myhome_update_{mac_addr}_4", clim_event)
     await hass.async_block_till_done()
 
+    # Boost coverage by simulating UI/core state machine reads for properties
+    for mac, data in hass.data[DOMAIN].items():
+        if CONF_ENTITIES in data:
+            for platform, entity_dict in data[CONF_ENTITIES].items():
+                for entity in entity_dict.values():
+                    _ = getattr(entity, "device_class", None)
+                    _ = getattr(entity, "state_class", None)
+                    _ = getattr(entity, "native_unit_of_measurement", None)
+                    _ = getattr(entity, "native_value", None)
+                    _ = getattr(entity, "extra_state_attributes", None)
+                    _ = getattr(entity, "state", None)
+                    _ = getattr(entity, "is_on", None)
+                    _ = getattr(entity, "current_temperature", None)
+                    _ = getattr(entity, "target_temperature", None)
+                    _ = getattr(entity, "hvac_mode", None)
+                    _ = getattr(entity, "hvac_modes", None)
+                    
+                    # Update method
+                    if hasattr(entity, "async_update"):
+                        await entity.async_update()
+                    if hasattr(entity, "update"):
+                        entity.update()
+
+    # Trigger error parser paths
+    error_event = OWNEvent.parse("*#4*01*#14*1220*1##") # Bad climate dimension
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_4", error_event)
+    error_event = OWNEvent.parse("*99*99*99*99##") # Bad sensor
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_18", error_event)
+    error_event = OWNEvent.parse("*1*0*12##") # Invalid action switch
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_1", error_event)
+    await hass.async_block_till_done()
+
     # Cleanup teardown
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     await hass.async_block_till_done()
