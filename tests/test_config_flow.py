@@ -221,8 +221,18 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         data={
             "host": "192.168.1.135",
+            "port": 20000,
             "password": "pass",
             "mac": "00:03:50:00:12:34",
+            "ssdp_location": "http://192.168.1.135:49153/description.xml",
+            "ssdp_st": "urn:schemas-upnp-org:device:Basic:1",
+            "deviceType": "urn:schemas-upnp-org:device:Basic:1",
+            "friendly_name": "MyHOME Gateway",
+            "manufacturer": "BTicino",
+            "manufacturerURL": "http://www.bticino.com",
+            "name": "F454",
+            "firmware": "2.0.0",
+            "UDN": "uuid:12345678-1234-1234-1234-123456789012"
         },
         options={
             "command_worker_count": 1,
