@@ -213,7 +213,8 @@ async def test_form_discovery_already_configured(hass: HomeAssistant) -> None:
     assert result2["reason"] == "already_configured"
 
 
-async def test_options_flow(hass: HomeAssistant) -> None:
+@patch("custom_components.myhome.async_setup_entry", return_value=True)
+async def test_options_flow(mock_setup_entry, hass: HomeAssistant) -> None:
     """Test options config flow."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
