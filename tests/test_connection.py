@@ -320,7 +320,8 @@ class TestOWNCommandSession:
 
     @pytest.mark.asyncio
     async def test_send_success(self, session):
-        session._stream_writer = AsyncMock()
+        session._stream_writer = MagicMock()
+        session._stream_writer.drain = AsyncMock()
         session._stream_reader = AsyncMock()
         
         # Simulating ACK response
@@ -332,7 +333,8 @@ class TestOWNCommandSession:
 
     @pytest.mark.asyncio
     async def test_send_retry_on_reset(self, session):
-        session._stream_writer = AsyncMock()
+        session._stream_writer = MagicMock()
+        session._stream_writer.drain = AsyncMock()
         session._stream_reader = AsyncMock()
         
         session._stream_writer.write.side_effect = ConnectionResetError
@@ -340,7 +342,8 @@ class TestOWNCommandSession:
         with patch.object(session, 'connect', new_callable=AsyncMock) as mock_connect:
             # Need to restore writer to simulate reconnect success
             async def restore_network():
-                session._stream_writer = AsyncMock()
+                session._stream_writer = MagicMock()
+                session._stream_writer.drain = AsyncMock()
                 session._stream_reader = AsyncMock()
                 session._stream_reader.readuntil.return_value = b"*1*1*12##"
                 return {"Success": True}

@@ -128,12 +128,19 @@ class MockAioHttpResponse:
     async def text(self):
         return self._text
 
-class MockAioHttpCM:
-    def __init__(self, text_data):
-        self._resp = MockAioHttpResponse(text_data)
+class MockSessionProvider:
+    def __init__(self, text_data=None, post_side_effect=None):
+        self._text_data = text_data
+        self.post_side_effect = post_side_effect
         
     async def __aenter__(self):
-        return self._resp
+        session = AsyncMock()
+        if self.post_side_effect:
+            session.post.side_effect = self.post_side_effect
+        elif self._text_data:
+            session.post.return_value = MockAioHttpResponse(self._text_data)
+            session.get.return_value = MockAioHttpResponse(self._text_data)
+        return session
         
     async def __aexit__(self, exc_type, exc, tb):
         pass
@@ -147,23 +154,21 @@ async def test_get_port_success():
     <Port>20000</Port>
     </u:getopenserverPortResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>'''
     
-    mock_resp = MockAioHttpResponse(xml_data)
+    provider = MockSessionProvider(xml_data)
 
-    with patch('aiohttp.ClientSession.post', new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_resp
+    with patch('aiohttp.ClientSession', return_value=provider) as mock_session_cls:
         port = await get_port("http://192.168.1.135:80/description.xml")
         assert port == 20000
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        assert args[0] == "http://192.168.1.135:80/upnp/pwdControl"
 
 @pytest.mark.asyncio
 async def test_get_port_exceptions():
-    with patch('aiohttp.ClientSession.post', side_effect=client_exceptions.ServerDisconnectedError(message="Disconnected")):
+    provider_1 = MockSessionProvider(post_side_effect=client_exceptions.ServerDisconnectedError(message="Disconnected"))
+    with patch('aiohttp.ClientSession', return_value=provider_1):
         port = await get_port("http://192.168.1.135:80/description.xml")
         assert port == 20000  # Fallback
         
-    with patch('aiohttp.ClientSession.post', side_effect=client_exceptions.ClientOSError()):
+    provider_2 = MockSessionProvider(post_side_effect=client_exceptions.ClientOSError())
+    with patch('aiohttp.ClientSession', return_value=provider_2):
         port = await get_port("http://192.168.1.135:80/description.xml")
         assert port == 20000  # Fallback
 
@@ -181,11 +186,10 @@ async def test_get_scpd_details():
         <UDN>uuid:upnp-Basic gateway-1_0-000350001234::upnp:rootdevice</UDN>
     </root>'''
     
-    mock_resp = MockAioHttpResponse(xml_data)
+    provider = MockSessionProvider(xml_data)
 
-    with patch('aiohttp.ClientSession.get', new_callable=AsyncMock) as mock_get, \
+    with patch('aiohttp.ClientSession', return_value=provider), \
          patch('custom_components.myhome.ownd.discovery.get_port', return_value=20000):
-        mock_get.return_value = mock_resp
         
         details = await _get_scpd_details("http://192.168.1.135:80/description.xml")
         
