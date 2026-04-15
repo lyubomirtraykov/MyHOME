@@ -70,7 +70,8 @@ def mock_hass():
 async def test_async_setup_entry_power_migration(mock_hass, mock_config_entry):
     mock_add_entities = MagicMock()
     
-    with patch("custom_components.myhome.sensor.er.async_get") as mock_er_get:
+    with patch("custom_components.myhome.sensor.er.async_get") as mock_er_get, \
+         patch("homeassistant.helpers.entity_platform.current_platform.get") as mock_platform:
         # Mock entity registry
         mock_registry = MagicMock()
         mock_registry.async_get_entity_id.return_value = "sensor.some_legacy_id"
@@ -97,7 +98,8 @@ async def test_async_setup_entry_power_migration(mock_hass, mock_config_entry):
 async def test_async_setup_entry_no_migration(mock_hass, mock_config_entry):
     mock_add_entities = MagicMock()
     
-    with patch("custom_components.myhome.sensor.er.async_get") as mock_er_get:
+    with patch("custom_components.myhome.sensor.er.async_get") as mock_er_get, \
+         patch("homeassistant.helpers.entity_platform.current_platform.get") as mock_platform:
         mock_registry = MagicMock()
         # No legacy entity id exists
         mock_registry.async_get_entity_id.return_value = None

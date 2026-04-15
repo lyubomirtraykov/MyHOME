@@ -10,6 +10,21 @@ from custom_components.myhome.const import (
     CONF_SHORT_RELEASE,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_DEVICE_TYPE,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
+    CONF_FIRMWARE,
+    CONF_UDN,
+)
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_PASSWORD,
+    CONF_NAME,
+    CONF_MAC,
+    CONF_FRIENDLY_NAME,
 )
 from custom_components.myhome.ownd.message import (
     OWNLightingEvent,
@@ -25,19 +40,19 @@ from custom_components.myhome.ownd.message import (
 def mock_config_entry():
     entry = MagicMock()
     entry.data = {
-        "host": "192.168.1.5",
-        "port": 20000,
-        "password": "open",
-        "ssdp_location": "",
-        "ssdp_st": "",
-        "deviceType": "Gateway",
-        "friendlyName": "GW",
-        "manufacturer": "Bticino",
-        "manufacturerURL": "",
-        "name": "MYHOME",
-        "firmware": "1.0",
-        "mac": "00:11:22:33:44:55",
-        "UDN": "1234",
+        CONF_HOST: "192.168.1.5",
+        CONF_PORT: 20000,
+        CONF_PASSWORD: "open",
+        CONF_SSDP_LOCATION: "",
+        CONF_SSDP_ST: "",
+        CONF_DEVICE_TYPE: "Gateway",
+        CONF_FRIENDLY_NAME: "GW",
+        CONF_MANUFACTURER: "Bticino",
+        CONF_MANUFACTURER_URL: "",
+        CONF_NAME: "MYHOME",
+        CONF_FIRMWARE: "1.0",
+        CONF_MAC: "00:11:22:33:44:55",
+        CONF_UDN: "1234",
     }
     return entry
 
