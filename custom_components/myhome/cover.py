@@ -223,6 +223,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
         """Stop the cover."""
         await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
 
+    @callback
     def handle_event(self, message: OWNAutomationEvent):
         """Handle an event message."""
         LOGGER.info(

@@ -40,7 +40,10 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if entry.data[CONF_MAC] not in hass.data[DOMAIN]:
-        hass.data[DOMAIN][entry.data[CONF_MAC]] = {}
+        hass.data[DOMAIN][entry.data[CONF_MAC]] = {
+            CONF_PLATFORMS: {p: {} for p in PLATFORMS},
+            CONF_ENTITIES: {p: {} for p in PLATFORMS},
+        }
 
     _generate_events = (
         entry.options.get(CONF_GENERATE_EVENTS, False)

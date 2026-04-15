@@ -5,6 +5,7 @@ from unittest.mock import patch
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import DOMAIN
@@ -111,7 +112,7 @@ async def test_platform_dynamic_discovery(hass: HomeAssistant, mock_gateway_conn
     await hass.async_block_till_done()
 
     # Entities should now be in the registry
-    entity_registry = hass.helpers.entity_registry.async_get(hass)
+    entity_registry = er.async_get(hass)
     
     # Check light entity exists
     light_entry = entity_registry.async_get("light.light_21")

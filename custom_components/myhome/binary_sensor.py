@@ -1,3 +1,4 @@
+from homeassistant.core import callback
 """Support for MyHome binary sensors (dry contacts and motion sensors)."""
 from datetime import datetime, timedelta, timezone
 from homeassistant.components.binary_sensor import (
@@ -166,6 +167,7 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
         """
         await self._gateway_handler.send_status_request(OWNDryContactCommand.status(self._where))
 
+    @callback
     def handle_event(self, message: OWNDryContactEvent):
         """Handle an event message."""
         LOGGER.info(
@@ -227,6 +229,7 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
     async def async_update(self):
         """AUX sensors are read only and cannot be queried, no async_update implementation."""
 
+    @callback
     def handle_event(self, message: OWNDryContactEvent):
         """Handle an event message."""
         LOGGER.info(
@@ -309,6 +312,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
             self._last_updated = datetime.now(timezone.utc)
             self.async_schedule_update_ha_state()
 
+    @callback
     def handle_event(self, message: OWNLightingEvent):
         """Handle an event message."""
         if message.message_type not in [

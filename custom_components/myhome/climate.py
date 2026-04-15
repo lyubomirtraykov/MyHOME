@@ -1,3 +1,4 @@
+from homeassistant.core import callback
 """Support for MyHome heating."""
 
 from homeassistant.components.climate import (
@@ -260,6 +261,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 )
             )
 
+    @callback
     def handle_event(self, message: OWNHeatingEvent):
         """Handle an event message."""
         if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:

@@ -289,6 +289,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
         return await self._gateway_handler.send(OWNLightingCommand.switch_off(self._full_where))
 
+    @callback
     def handle_event(self, message: OWNLightingEvent):
         """Handle an event message."""
         LOGGER.info(

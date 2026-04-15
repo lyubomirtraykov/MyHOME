@@ -163,6 +163,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             )
         )
 
+    @callback
     def handle_global_source_event(self, message):
         """Intercept global source change events to update UI."""
         if isinstance(message, OWNSoundEvent) and message.is_source_event:
@@ -196,6 +197,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             source_id = source.split(" ")[1]
             await self._gateway_handler.send(OWNSoundCommand.select_source(source_id))
 
+    @callback
     def handle_event(self, message: OWNSoundEvent):
         """Handle an event message."""
         LOGGER.info(

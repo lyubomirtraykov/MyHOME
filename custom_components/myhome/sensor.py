@@ -1,3 +1,4 @@
+from homeassistant.core import callback
 """Support for MyHome sensors (power/energy, temperature, illuminance)."""
 
 from datetime import timedelta
@@ -272,6 +273,7 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
         """
         # await self.start_sending_instant_power(255)
 
+    @callback
     def handle_event(self, message: OWNEnergyEvent):
         """Handle an event message."""
         if message.message_type not in [MESSAGE_TYPE_ACTIVE_POWER]:
@@ -379,6 +381,7 @@ class MyHOMEEnergySensor(MyHOMEEntity, SensorEntity):
                 OWNEnergyCommand.get_partial_daily_consumption(self._where)
             )
 
+    @callback
     def handle_event(self, message: OWNEnergyEvent):
         """Handle an event message."""
         if message.message_type not in [
@@ -489,6 +492,7 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
             OWNHeatingCommand.get_temperature(self._where)
         )
 
+    @callback
     def handle_event(self, message: OWNHeatingEvent):
         """Handle an event message."""
         if message.message_type not in [
@@ -583,6 +587,7 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
             OWNLightingCommand.get_illuminance(self._where)
         )
 
+    @callback
     def handle_event(self, message: OWNLightingEvent):
         """Handle an event message."""
         if message.message_type not in [MESSAGE_TYPE_ILLUMINANCE]:

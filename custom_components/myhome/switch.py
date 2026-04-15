@@ -1,3 +1,4 @@
+from homeassistant.core import callback
 """Support for MyHome switches (light modules used for controlled outlets, relays)."""
 from homeassistant.components.switch import (
     DOMAIN as PLATFORM,
@@ -137,6 +138,7 @@ class MyHOMESwitch(MyHOMEEntity, SwitchEntity):
         """Turn the device off."""
         await self._gateway_handler.send(OWNLightingCommand.switch_off(self._full_where))
 
+    @callback
     def handle_event(self, message: OWNLightingEvent):
         """Handle an event message."""
         if self._attr_device_class == SwitchDeviceClass.SWITCH:
