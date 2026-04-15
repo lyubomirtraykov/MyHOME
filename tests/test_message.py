@@ -1,5 +1,5 @@
 import pytest
-from message_target import OWNEvent, OWNSoundEvent, OWNSoundCommand
+from custom_components.myhome.ownd.message import OWNEvent, OWNSoundEvent, OWNSoundCommand
 
 def test_own_sound_event_parsing():
     """Test parsing of WHO=16 Audio Events."""
