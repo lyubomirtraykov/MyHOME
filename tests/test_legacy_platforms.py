@@ -72,10 +72,10 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
             },
             "sensor": {
                 "sens_1": {
-                    CONF_WHO: "1", CONF_WHERE: "1", CONF_NAME: "Sensor 1",
+                    CONF_WHO: "18", CONF_WHERE: "51", CONF_NAME: "Sensor 1",
                     CONF_ENTITY_NAME: "Sensor 1", CONF_DEVICE_CLASS: "power",
                     CONF_MANUFACTURER: "B", CONF_DEVICE_MODEL: "M",
-                    CONF_ENTITIES: {}
+                    CONF_ENTITIES: {"daily_energy": "daily"}
                 }
             },
             "button": {
@@ -117,14 +117,34 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     # Hit Switch turn_on and turn_off coverage
     await hass.services.async_call("switch", "turn_on", {"entity_id": "switch.switch_12"}, blocking=True)
     await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.switch_12"}, blocking=True)
+    # Switch Event
+    sw_event = OWNEvent.parse("*1*1*12##")
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_1", sw_event)
+    await hass.async_block_till_done()
 
-    # Hit Climate set_temperature coverage
+    # Hit Climate set_temperature and hvac coverage
     await hass.services.async_call("climate", "set_temperature", {"entity_id": "climate.climate_1", "temperature": 22.0}, blocking=True)
     await hass.services.async_call("climate", "set_hvac_mode", {"entity_id": "climate.climate_1", "hvac_mode": "heat"}, blocking=True)
-    
-    # Send Dummy Dispatch updates to binary sensor
+    await hass.services.async_call("climate", "set_hvac_mode", {"entity_id": "climate.climate_1", "hvac_mode": "cool"}, blocking=True)
+    await hass.services.async_call("climate", "set_hvac_mode", {"entity_id": "climate.climate_1", "hvac_mode": "off"}, blocking=True)
+    await hass.services.async_call("climate", "set_hvac_mode", {"entity_id": "climate.climate_1", "hvac_mode": "auto"}, blocking=True)
+    # Climate Event
+    clim_event = OWNEvent.parse("*#4*01*#14*0220*1##")
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_4", clim_event)
+    await hass.async_block_till_done()
+
+    # Hit Binary Sensor
     bs_event = OWNEvent.parse("*25*31#1*35##")
-    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_35", bs_event)
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_25", bs_event)
+    await hass.async_block_till_done()
+
+    # Hit Sensor Event
+    sens_event = OWNEvent.parse("*18*51*113*114*115##")
+    async_dispatcher_send(hass, f"myhome_update_{mac_addr}_18", sens_event)
+    await hass.async_block_till_done()
+
+    # Hit Button Press
+    await hass.services.async_call("button", "press", {"entity_id": "button.button_1"}, blocking=True)
     await hass.async_block_till_done()
     
     # Send Dummy Dispatch update to climate 
