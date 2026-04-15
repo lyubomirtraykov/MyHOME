@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
-from homeassistant.const import (CONF_MAC, CONF_NAME, CONF_DEVICE_CLASS, CONF_HOST, CONF_PORT, CONF_PASSWORD)
+from homeassistant.const import (CONF_MAC, CONF_NAME, CONF_DEVICE_CLASS, CONF_HOST, CONF_PORT, CONF_PASSWORD, CONF_FRIENDLY_NAME)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import (
@@ -11,7 +11,7 @@ from custom_components.myhome.const import (
     CONF_ZONE, CONF_ENTITY_NAME, CONF_INVERTED,
     CONF_MANUFACTURER, CONF_DEVICE_MODEL, CONF_HEATING_SUPPORT, CONF_COOLING_SUPPORT,
     CONF_FAN_SUPPORT, CONF_STANDALONE, CONF_CENTRAL, CONF_ICON, CONF_ICON_ON,
-    CONF_SSDP_LOCATION, CONF_SSDP_ST, CONF_DEVICE_TYPE, CONF_FRIENDLY_NAME,
+    CONF_SSDP_LOCATION, CONF_SSDP_ST, CONF_DEVICE_TYPE,
     CONF_MANUFACTURER_URL, CONF_FIRMWARE, CONF_UDN
 )
 from custom_components.myhome.ownd.message import OWNEvent
