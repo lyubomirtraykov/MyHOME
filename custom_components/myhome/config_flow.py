@@ -100,6 +100,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                 dr.format_mac(self.gateway_handler.serial),
                 raise_on_progress=False,
             )
+            self._abort_if_unique_id_configured()
             # We pass user input to link so it will attempt to link right away
             return await self.async_step_test_connection()
 
@@ -158,6 +159,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                 user_input["UDN"] = (None,)
                 self.gateway_handler = OWNGateway(user_input)
                 await self.async_set_unique_id(user_input["serialNumber"], raise_on_progress=False)
+                self._abort_if_unique_id_configured()
                 return await self.async_step_test_connection()
 
         address_suggestion = user_input["address"] if user_input is not None and user_input["address"] is not None else "192.168.1.135"
