@@ -69,6 +69,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 where = device_id
                 interface = None
 
+            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
+            _predicted_id = f"light.light_{where.replace(' ', '_')}"
+            _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
+
             _light = MyHOMELight(
                 hass=hass,
                 name=f"Light {where}",
@@ -79,7 +83,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 who="1",
                 where=where,
                 interface=interface,
-                dimmable=False,
+                dimmable=_is_dimmable,
                 manufacturer="BTicino",
                 model="Lighting Device",
                 gateway=gateway,
@@ -106,6 +110,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         if unique_id not in known_lights:
             # We found a new light!
+            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
+            _predicted_id = f"light.light_{where.replace(' ', '_')}"
+            _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
+            
             _light = MyHOMELight(
                 hass=hass,
                 name=f"Light {where}",
@@ -116,7 +124,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 who=str(message.who),
                 where=where,
                 interface=interface,
-                dimmable=False,  # This can be handled by OptionsFlow overrides later
+                dimmable=_is_dimmable,  # Extracted from customize.yaml
                 manufacturer="BTicino",
                 model="Lighting Device",
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
