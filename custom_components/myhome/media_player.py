@@ -134,7 +134,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             gateway=gateway,
         )
 
-        self._attr_name = entity_name
+
         self._attr_supported_features = (
             MediaPlayerEntityFeature.TURN_ON
             | MediaPlayerEntityFeature.TURN_OFF

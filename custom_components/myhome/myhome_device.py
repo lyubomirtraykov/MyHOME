@@ -35,8 +35,8 @@ class MyHOMEEntity(Entity):
         self._manufacturer = manufacturer or "BTicino S.p.A."
         self._model = model
         self._gateway_handler = gateway
-        self._attr_has_entity_name = True
-        self._attr_name = None
+        self._attr_has_entity_name = False
+        self._attr_name = name
         self._attr_entity_registry_enabled_default = True
         self._attr_should_poll = False
 

@@ -184,7 +184,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             gateway=gateway,
         )
 
-        self._attr_name = entity_name
+
 
         self._interface = interface
         self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
