@@ -80,9 +80,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         entity_registry.async_update_entity(
                             reg_entry.entity_id, new_unique_id=new_unique_id
                         )
+                        reg_entry = entity_registry.async_get(reg_entry.entity_id) # reload
                         LOGGER.info("Resurrecting orphaned MyHOME entity %s to new unique_id %s", reg_entry.entity_id, new_unique_id)
                     except ValueError as e:
                         LOGGER.warning("Could not auto-migrate entity %s to %s: %s", reg_entry.entity_id, new_unique_id, e)
+
+    # Force alignment of entity_ids back to default light.light_69 and cover.cover_18 format!
+    # Because a previous buggy implementation overrode _attr_name in the component,
+    # HA generated dynamic friendly entity_ids (e.g. light.keuken_tafel).
+    # We must revert them to match the dashboard and customize.yaml.
+    registry_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    for reg_entry in registry_entries:
+        parts = reg_entry.unique_id.split("-")
+        if len(parts) >= 3 and parts[0] == _mac:
+            where_part = "-".join(parts[2:]) # Handle #4# logic if any
+            clean_where = where_part.split("#4#")[0]
+            expected_entity_id = f"{reg_entry.domain}.{reg_entry.domain}_{clean_where}"
+            if reg_entry.entity_id != expected_entity_id:
+                try:
+                    entity_registry.async_update_entity(reg_entry.entity_id, new_entity_id=expected_entity_id)
+                    LOGGER.info("Restoring Entity ID %s back to %s", reg_entry.entity_id, expected_entity_id)
+                except ValueError as e:
+                    LOGGER.warning("Could not restore entity %s to %s: %s", reg_entry.entity_id, expected_entity_id, e)
 
     # Hack to forcefully absorb customize.yaml for users who deleted their integrations
     # and therefore lost the transparent entity_registry migration!
@@ -168,7 +187,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     async def handle_sync_time(call):
         gateway = call.data.get(ATTR_GATEWAY, None)
         if gateway is None:
-            gateway = list(hass.data[DOMAIN].keys())[0]
+            _gw_keys = [k for k in hass.data[DOMAIN] if isinstance(k, str) and ":" in k]
+            if not _gw_keys:
+                LOGGER.error("No MyHOME gateways found, cannot sync time.")
+                return False
+            gateway = _gw_keys[0]
         else:
             mac = dr.format_mac(gateway)
             if mac is None:
@@ -197,7 +220,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         gateway = call.data.get(ATTR_GATEWAY, None)
         message = call.data.get(ATTR_MESSAGE, None)
         if gateway is None:
-            gateway = list(hass.data[DOMAIN].keys())[0]
+            _gw_keys = [k for k in hass.data[DOMAIN] if isinstance(k, str) and ":" in k]
+            if not _gw_keys:
+                LOGGER.error("No MyHOME gateways found, cannot send message `%s`.", message)
+                return False
+            gateway = _gw_keys[0]
         else:
             mac = dr.format_mac(gateway)
             if mac is None:
