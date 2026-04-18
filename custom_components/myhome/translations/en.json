@@ -25,10 +25,16 @@
       },
       "custom": {
         "title": "Manual gateway entry",
-        "description": "Fill out the information for your gateway",
+        "description": "Enter the gateway IP address and port. The MAC address and model will be auto-discovered.",
         "data": {
           "address": "IP address",
-          "port": "Port",
+          "port": "Port"
+        }
+      },
+      "custom_manual": {
+        "title": "Manual gateway entry (discovery failed)",
+        "description": "Could not auto-discover the gateway at {host}:{port}. Please enter the MAC address and model manually.",
+        "data": {
           "serialNumber": "MAC address",
           "modelName": "Device type"
         }

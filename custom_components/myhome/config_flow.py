@@ -34,7 +34,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from .ownd.connection import OWNGateway, OWNSession
-from .ownd.discovery import find_gateways
+from .ownd.discovery import find_gateways, get_gateway
 
 from .const import (
     CONF_ADDRESS,
@@ -136,9 +136,80 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_custom(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
-        """Handle manual gateway setup."""
+        """Handle manual gateway setup — auto-discovers MAC from IP when possible.
+
+        Step 1: User provides only IP and port.
+        We attempt UPnP discovery to resolve serial, model, and other metadata
+        automatically.  If discovery succeeds the user never needs to type the MAC.
+        If it fails we fall through to async_step_custom_manual.
+        """
 
         if user_input is not None:
+            try:
+                user_input["address"] = str(ipaddress.IPv4Address(user_input["address"]))
+            except ipaddress.AddressValueError:
+                errors["address"] = "invalid_ip"
+
+            if not errors:
+                # Try UPnP/SSDP auto-discovery to resolve the MAC automatically
+                try:
+                    async with asyncio.timeout(5):
+                        discovered = await get_gateway(user_input["address"])
+                except (asyncio.TimeoutError, Exception):  # pylint: disable=broad-except
+                    discovered = None
+
+                if discovered is not None:
+                    # Discovery succeeded — populate everything from UPnP
+                    discovered["password"] = None
+                    discovered["port"] = discovered.get("port") or user_input.get("port", 20000)
+                    self.gateway_handler = OWNGateway(discovered)
+                    await self.async_set_unique_id(
+                        dr.format_mac(self.gateway_handler.serial),
+                        raise_on_progress=False,
+                    )
+                    self._abort_if_unique_id_configured()
+                    LOGGER.info(
+                        "Auto-discovered gateway at %s — serial %s, model %s",
+                        user_input["address"],
+                        self.gateway_handler.serial,
+                        self.gateway_handler.model_name,
+                    )
+                    return await self.async_step_test_connection()
+                else:
+                    # Discovery failed — fall back to full manual form
+                    LOGGER.warning(
+                        "Could not auto-discover gateway at %s, falling back to manual entry",
+                        user_input["address"],
+                    )
+                    self._custom_address = user_input["address"]
+                    self._custom_port = user_input.get("port", 20000)
+                    return await self.async_step_custom_manual()
+
+        address_suggestion = user_input["address"] if user_input is not None and user_input.get("address") else "192.168.1.135"
+        port_suggestion = user_input["port"] if user_input is not None and user_input.get("port") else 20000
+
+        return self.async_show_form(
+            step_id="custom",
+            data_schema=Schema(
+                {
+                    Required("address", description={"suggested_value": address_suggestion}): str,
+                    Required("port", description={"suggested_value": port_suggestion}): int,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_custom_manual(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
+        """Fallback manual entry when UPnP auto-discovery fails.
+
+        Shown only when the gateway could not be discovered by IP.
+        The address and port are carried over from the previous step.
+        """
+
+        if user_input is not None:
+            user_input["address"] = getattr(self, "_custom_address", user_input.get("address", ""))
+            user_input["port"] = getattr(self, "_custom_port", user_input.get("port", 20000))
+
             try:
                 user_input["address"] = str(ipaddress.IPv4Address(user_input["address"]))
             except ipaddress.AddressValueError:
@@ -163,17 +234,15 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return await self.async_step_test_connection()
 
-        address_suggestion = user_input["address"] if user_input is not None and user_input["address"] is not None else "192.168.1.135"
-        port_suggestion = user_input["port"] if user_input is not None and user_input["port"] is not None else 20000
-        serial_number_suggestion = user_input["serialNumber"] if user_input is not None and user_input["serialNumber"] is not None else "00:03:50:00:00:00"
-        model_name_suggestion = user_input["modelName"] if user_input is not None and user_input["modelName"] is not None else "F454"
+        address_val = getattr(self, "_custom_address", "192.168.1.135")
+        port_val = getattr(self, "_custom_port", 20000)
+        serial_number_suggestion = user_input["serialNumber"] if user_input is not None and user_input.get("serialNumber") else "00:03:50:00:00:00"
+        model_name_suggestion = user_input["modelName"] if user_input is not None and user_input.get("modelName") else "F454"
 
         return self.async_show_form(
-            step_id="custom",
+            step_id="custom_manual",
             data_schema=Schema(
                 {
-                    Required("address", description={"suggested_value": address_suggestion}): str,
-                    Required("port", description={"suggested_value": port_suggestion}): int,
                     Required(
                         "serialNumber",
                         description={"suggested_value": serial_number_suggestion},
@@ -184,6 +253,10 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                     ): str,
                 }
             ),
+            description_placeholders={
+                CONF_HOST: address_val,
+                CONF_PORT: str(port_val),
+            },
             errors=errors,
         )
 
