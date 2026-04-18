@@ -9,10 +9,27 @@ from custom_components.myhome.const import DOMAIN
 
 
 async def test_form(hass: HomeAssistant) -> None:
-    """Test the full config flow: user -> custom -> test_connection creates an entry."""
+    """Test the full config flow: user -> custom (auto-discover) -> test_connection creates an entry."""
+    mock_discovered = {
+        "address": "192.168.1.135",
+        "port": 20000,
+        "serialNumber": "00:03:50:00:12:34",
+        "modelName": "F454",
+        "ssdp_location": None,
+        "ssdp_st": None,
+        "deviceType": None,
+        "friendlyName": None,
+        "manufacturer": "BTicino S.p.A.",
+        "manufacturerURL": "http://www.bticino.it",
+        "modelNumber": None,
+        "UDN": None,
+    }
     with patch(
         "custom_components.myhome.config_flow.find_gateways",
         return_value=[]
+    ), patch(
+        "custom_components.myhome.config_flow.get_gateway",
+        return_value=mock_discovered,
     ), patch(
         "custom_components.myhome.config_flow.OWNSession.test_connection",
         return_value={"Success": True},
@@ -35,14 +52,12 @@ async def test_form(hass: HomeAssistant) -> None:
         assert result2["type"] == FlowResultType.FORM
         assert result2["step_id"] == "custom"
 
-        # Step 3: fill custom form with address/port/serialNumber/modelName
+        # Step 3: fill custom form with address/port — MAC auto-discovered via get_gateway
         result3 = await hass.config_entries.flow.async_configure(
             result2["flow_id"],
             {
                 "address": "192.168.1.135",
                 "port": 20000,
-                "serialNumber": "00:03:50:00:12:34",
-                "modelName": "F454",
             },
         )
         await hass.async_block_till_done()
@@ -58,6 +73,9 @@ async def test_form_cannot_connect(hass: HomeAssistant) -> None:
         "custom_components.myhome.config_flow.find_gateways",
         return_value=[]
     ), patch(
+        "custom_components.myhome.config_flow.get_gateway",
+        return_value=None,
+    ), patch(
         "custom_components.myhome.config_flow.OWNSession.test_connection",
         return_value={"Success": False, "Message": "connection_refused"},
     ):
@@ -72,20 +90,29 @@ async def test_form_cannot_connect(hass: HomeAssistant) -> None:
             {"serial": "00:00:00:00:00:00"},
         )
 
-        # Step 3: fill custom form
+        # Step 3: fill custom form (discovery fails -> falls to custom_manual)
         result3 = await hass.config_entries.flow.async_configure(
             result2["flow_id"],
             {
                 "address": "192.168.1.135",
                 "port": 20000,
+            },
+        )
+        assert result3["type"] == FlowResultType.FORM
+        assert result3["step_id"] == "custom_manual"
+
+        # Step 4: fill manual form with serialNumber/modelName
+        result4 = await hass.config_entries.flow.async_configure(
+            result3["flow_id"],
+            {
                 "serialNumber": "00:03:50:00:12:34",
                 "modelName": "F454",
             },
         )
 
     # connection_refused should cause an abort
-    assert result3["type"] == FlowResultType.ABORT
-    assert result3["reason"] == "connection_refused"
+    assert result4["type"] == FlowResultType.ABORT
+    assert result4["reason"] == "connection_refused"
 
 
 async def test_form_already_configured(hass: HomeAssistant) -> None:
@@ -107,6 +134,9 @@ async def test_form_already_configured(hass: HomeAssistant) -> None:
         "custom_components.myhome.config_flow.find_gateways",
         return_value=[]
     ), patch(
+        "custom_components.myhome.config_flow.get_gateway",
+        return_value=None,
+    ), patch(
         "custom_components.myhome.config_flow.OWNSession.test_connection",
         return_value={"Success": True},
     ):
@@ -119,18 +149,27 @@ async def test_form_already_configured(hass: HomeAssistant) -> None:
             {"serial": "00:00:00:00:00:00"},
         )
 
+        # Discovery fails -> custom_manual
         result3 = await hass.config_entries.flow.async_configure(
             result2["flow_id"],
             {
                 "address": "192.168.1.135",
                 "port": 20000,
+            },
+        )
+        assert result3["type"] == FlowResultType.FORM
+        assert result3["step_id"] == "custom_manual"
+
+        result4 = await hass.config_entries.flow.async_configure(
+            result3["flow_id"],
+            {
                 "serialNumber": "00:03:50:00:12:34",
                 "modelName": "F454",
             },
         )
 
-    assert result3["type"] == FlowResultType.ABORT
-    assert result3["reason"] == "already_configured"
+    assert result4["type"] == FlowResultType.ABORT
+    assert result4["reason"] == "already_configured"
 
 
 async def test_form_discovery(hass: HomeAssistant) -> None:
@@ -381,6 +420,9 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
         "custom_components.myhome.config_flow.find_gateways",
         return_value=[]
     ), patch(
+        "custom_components.myhome.config_flow.get_gateway",
+        return_value=None,
+    ), patch(
         "custom_components.myhome.config_flow.OWNSession.test_connection",
         side_effect=[
             {"Success": False, "Message": "password_required"},
@@ -398,22 +440,32 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
             result["flow_id"],
             {"serial": "00:00:00:00:00:00"},
         )
+        # Custom step: discovery fails -> custom_manual
         result3 = await hass.config_entries.flow.async_configure(
             result2["flow_id"],
             {
                 "address": "192.168.1.135",
                 "port": 20000,
+            },
+        )
+        assert result3["type"] == FlowResultType.FORM
+        assert result3["step_id"] == "custom_manual"
+
+        # Fill manual form
+        result3b = await hass.config_entries.flow.async_configure(
+            result3["flow_id"],
+            {
                 "serialNumber": "00:03:50:00:12:34",
                 "modelName": "F454",
             },
         )
         # 1st attempt: password required
-        assert result3["type"] == FlowResultType.FORM
-        assert result3["step_id"] == "password"
+        assert result3b["type"] == FlowResultType.FORM
+        assert result3b["step_id"] == "password"
 
         # 2nd attempt: password error
         result4 = await hass.config_entries.flow.async_configure(
-            result3["flow_id"],
+            result3b["flow_id"],
             {"password": "wrong_password"}
         )
         assert result4["type"] == FlowResultType.FORM
