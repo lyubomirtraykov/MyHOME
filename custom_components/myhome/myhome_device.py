@@ -36,11 +36,8 @@ class MyHOMEEntity(Entity):
         self._model = model
         self._gateway_handler = gateway
         self._attr_has_entity_name = False
-        
-        # Pull from customize.yaml dynamically
-        _customs = self._hass.data.get(DOMAIN, {}).get("customizations", {})
-        _predicted_id = f"{platform.lower()}.{name.lower().replace(' ', '_')}"
-        self._attr_name = _customs.get(_predicted_id, {}).get("friendly_name", name)
+        self._attr_name = name
+        self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_')}"
         
         self._attr_entity_registry_enabled_default = True
         self._attr_should_poll = False

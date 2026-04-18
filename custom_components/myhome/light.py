@@ -70,12 +70,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 interface = None
 
             _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
-            _predicted_id = f"light.light_{where.replace(' ', '_')}"
+            clean_where = where.split('-')[-1]
+            _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
             _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
 
             _light = MyHOMELight(
                 hass=hass,
-                name=f"Light {where}",
+                name=f"Light {clean_where}",
                 entity_name=None,
                 icon=None,
                 icon_on=None,
@@ -111,12 +112,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         if unique_id not in known_lights:
             # We found a new light!
             _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
-            _predicted_id = f"light.light_{where.replace(' ', '_')}"
+            clean_where = where.split('-')[-1]
+            _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
             _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
             
             _light = MyHOMELight(
                 hass=hass,
-                name=f"Light {where}",
+                name=f"Light {clean_where}",
                 entity_name=None,
                 icon=None,
                 icon_on=None,

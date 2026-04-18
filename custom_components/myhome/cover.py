@@ -63,9 +63,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 where = device_id
                 interface = None
 
+            clean_where = where.split('-')[-1]
             _cover = MyHOMECover(
                 hass=hass,
-                name=f"Cover {where}",
+                name=f"Cover {clean_where}",
                 entity_name=None,
                 device_id=device_id,
                 who="2",
@@ -98,9 +99,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         if unique_id not in known_covers:
             # We found a new cover!
+            clean_where = where.split('-')[-1]
             _cover = MyHOMECover(
                 hass=hass,
-                name=f"Cover {where}",
+                name=f"Cover {clean_where}",
                 entity_name=None,
                 device_id=unique_id,
                 who=str(message.who),
