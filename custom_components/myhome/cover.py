@@ -53,8 +53,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     for entry in existing_entries:
         if entry.domain == PLATFORM:
             unique_id = entry.unique_id
-            # unique_id format: "{mac}-{device_id}", device_id is "{where}" or "{where}#4#{interface}"
-            device_id = unique_id.replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            # unique_id format: "{mac}-{who}-{device_id}"
+            # device_id is "{where}" or "{where}#4#{interface}"
+            after_mac = unique_id.replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            # Strip the WHO prefix: "2-85" -> "85", "2-18#4#02" -> "18#4#02"
+            parts_who = after_mac.split("-", 1)
+            device_id = parts_who[-1] if len(parts_who) > 1 else after_mac
             if "#4#" in device_id:
                 parts = device_id.split("#4#")
                 where = parts[0]
