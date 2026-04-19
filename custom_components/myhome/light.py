@@ -119,7 +119,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             clean_where = where.split('-')[-1]
             _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
             _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
-            
+
+            # Auto-detect dimmer from the first protocol message
+            if not _is_dimmable:
+                _is_dimmable = (
+                    message.brightness is not None
+                    or message.brightness_preset is not None
+                )
+
             _light = MyHOMELight(
                 hass=hass,
                 name=f"Light {clean_where}",
@@ -130,7 +137,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 who=str(message.who),
                 where=where,
                 interface=interface,
-                dimmable=_is_dimmable,  # Extracted from customize.yaml
+                dimmable=_is_dimmable,
                 manufacturer="BTicino",
                 model="Lighting Device",
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
@@ -312,6 +319,19 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             message.human_readable_log,
         )
         self._attr_is_on = message.is_on
+
+        # Auto-promote to dimmable when brightness data is received
+        if (message.brightness is not None or message.brightness_preset is not None):
+            if ColorMode.BRIGHTNESS not in self._attr_supported_color_modes:
+                LOGGER.info(
+                    "Auto-detected dimmer for light %s, upgrading to BRIGHTNESS mode.",
+                    self._where,
+                )
+                self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+                self._attr_color_mode = ColorMode.BRIGHTNESS
+                self._attr_supported_features |= LightEntityFeature.TRANSITION
+                self._attr_supported_features &= ~LightEntityFeature.FLASH
+
         if ColorMode.BRIGHTNESS in self._attr_supported_color_modes and message.brightness is not None:
             self._attr_brightness_pct = message.brightness
             self._attr_brightness = percent_to_eight_bits(message.brightness)
