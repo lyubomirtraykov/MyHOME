@@ -38,8 +38,13 @@ from .ownd.discovery import find_gateways, get_gateway
 
 from .const import (
     CONF_ADDRESS,
+    CONF_DECODER_ENTITY,
+    CONF_DECODER_PRE_GAIN,
+    CONF_DECODER_SLOTS,
+    CONF_DECODER_SOURCE,
     CONF_DEVICE_TYPE,
     CONF_FIRMWARE,
+    CONF_GENERATE_EVENTS,
     CONF_MANUFACTURER,
     CONF_MANUFACTURER_URL,
     CONF_OWN_PASSWORD,
@@ -48,7 +53,6 @@ from .const import (
     CONF_UDN,
     CONF_WORKER_COUNT,
     CONF_FILE_PATH,
-    CONF_GENERATE_EVENTS,
     DOMAIN,
     LOGGER,
 )
@@ -448,7 +452,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 
 
 class MyhomeOptionsFlowHandler(OptionsFlow):
-    """Handle MyHome options."""
+    """Handle MyHome options (general settings + decoder mapping)."""
 
     def __init__(self, config_entry):
         """Initialize MyHome options flow."""
@@ -465,51 +469,90 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
         return await self.async_step_user()
 
     async def async_step_user(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
-        """Manage the MyHome devices options."""
+        """Manage general settings and decoder mapping."""
 
         errors = {}
 
         if user_input is not None:
-            self.options.update({CONF_WORKER_COUNT: user_input[CONF_WORKER_COUNT]})
-            self.options.update({CONF_GENERATE_EVENTS: user_input[CONF_GENERATE_EVENTS]})
-
-            _data_update = not (self.data.get(CONF_HOST) == user_input.get(CONF_ADDRESS) and self.data.get(CONF_PASSWORD) == user_input.get(CONF_OWN_PASSWORD))
-            self.data.update({CONF_HOST: user_input.get(CONF_ADDRESS)})
-            self.data.update({CONF_PASSWORD: user_input.get(CONF_OWN_PASSWORD)})
-
-            try:
-                self.data[CONF_HOST] = str(ipaddress.IPv4Address(self.data[CONF_HOST]))
-            except ipaddress.AddressValueError:
-                errors[CONF_ADDRESS] = "invalid_ip"
+            # ── Validate decoder entity IDs ───────────────────────────────
+            for i in range(1, CONF_DECODER_SLOTS + 1):
+                entity_key = CONF_DECODER_ENTITY.format(i)
+                entity_val = user_input.get(entity_key, "").strip()
+                if entity_val and not entity_val.startswith("media_player."):
+                    errors[entity_key] = "not_a_media_player"
 
             if not errors:
-                if _data_update:
-                    self.hass.config_entries.async_update_entry(self.config_entry, data=self.data)
-                    await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                self.options.update({CONF_WORKER_COUNT: user_input[CONF_WORKER_COUNT]})
+                self.options.update({CONF_GENERATE_EVENTS: user_input[CONF_GENERATE_EVENTS]})
 
-                return self.async_create_entry(title="", data=self.options)
+                # Persist decoder slots
+                for i in range(1, CONF_DECODER_SLOTS + 1):
+                    entity_key = CONF_DECODER_ENTITY.format(i)
+                    source_key = CONF_DECODER_SOURCE.format(i)
+                    gain_key = CONF_DECODER_PRE_GAIN.format(i)
+                    self.options[entity_key] = user_input.get(entity_key, "")
+                    self.options[source_key] = user_input.get(source_key, i)
+                    self.options[gain_key] = user_input.get(gain_key, 0)
+
+                _data_update = not (
+                    self.data.get(CONF_HOST) == user_input.get(CONF_ADDRESS)
+                    and self.data.get(CONF_PASSWORD) == user_input.get(CONF_OWN_PASSWORD)
+                )
+                self.data.update({CONF_HOST: user_input.get(CONF_ADDRESS)})
+                self.data.update({CONF_PASSWORD: user_input.get(CONF_OWN_PASSWORD)})
+
+                try:
+                    self.data[CONF_HOST] = str(ipaddress.IPv4Address(self.data[CONF_HOST]))
+                except ipaddress.AddressValueError:
+                    errors[CONF_ADDRESS] = "invalid_ip"
+
+                if not errors:
+                    if _data_update:
+                        self.hass.config_entries.async_update_entry(self.config_entry, data=self.data)
+                        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+                    return self.async_create_entry(title="", data=self.options)
+
+        # ── Build form schema ─────────────────────────────────────────────
+        schema_dict = {
+            Required(
+                CONF_ADDRESS,
+                description={"suggested_value": self.data.get(CONF_HOST) or ""},
+            ): str,
+            vol.Optional(
+                CONF_OWN_PASSWORD,
+                description={"suggested_value": self.data.get(CONF_PASSWORD) or ""},
+            ): str,
+            Required(
+                CONF_WORKER_COUNT,
+                description={"suggested_value": self.options[CONF_WORKER_COUNT]},
+            ): All(Coerce(int), Range(min=1, max=10)),
+            Required(
+                CONF_GENERATE_EVENTS,
+                description={"suggested_value": self.options[CONF_GENERATE_EVENTS]},
+            ): bool,
+        }
+
+        # Decoder slots 1–4
+        for i in range(1, CONF_DECODER_SLOTS + 1):
+            entity_key = CONF_DECODER_ENTITY.format(i)
+            source_key = CONF_DECODER_SOURCE.format(i)
+            gain_key = CONF_DECODER_PRE_GAIN.format(i)
+            schema_dict[vol.Optional(
+                entity_key,
+                description={"suggested_value": self.options.get(entity_key, "")},
+            )] = str
+            schema_dict[vol.Optional(
+                source_key,
+                description={"suggested_value": self.options.get(source_key, i)},
+            )] = All(Coerce(int), Range(min=1, max=4))
+            schema_dict[vol.Optional(
+                gain_key,
+                description={"suggested_value": self.options.get(gain_key, 0)},
+            )] = All(Coerce(int), Range(min=0, max=50))
 
         return self.async_show_form(
             step_id="user",
-            data_schema=Schema(
-                {
-                    Required(
-                        CONF_ADDRESS,
-                        description={"suggested_value": self.data.get(CONF_HOST) or ""},
-                    ): str,
-                    vol.Optional(
-                        CONF_OWN_PASSWORD,
-                        description={"suggested_value": self.data.get(CONF_PASSWORD) or ""},
-                    ): str,
-                    Required(
-                        CONF_WORKER_COUNT,
-                        description={"suggested_value": self.options[CONF_WORKER_COUNT]},
-                    ): All(Coerce(int), Range(min=1, max=10)),
-                    Required(
-                        CONF_GENERATE_EVENTS,
-                        description={"suggested_value": self.options[CONF_GENERATE_EVENTS]},
-                    ): bool,
-                }
-            ),
+            data_schema=Schema(schema_dict),
             errors=errors,
         )

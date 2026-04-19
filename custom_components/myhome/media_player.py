@@ -1,22 +1,58 @@
-"""Support for MyHome audio zones."""
+"""Support for MyHome audio zones with Dynamic Proxy for streaming services.
+
+Architecture
+------------
+The MyHOME BTicino F441M is a **hardware-only analog matrix** — it cannot
+decode IP streams directly.  This module bridges Music Assistant and Spotify
+Connect to the matrix by implementing a *Dynamic Proxy* pattern:
+
+1. Each ``MyHOMEMediaPlayer`` zone entity dynamically advertises
+   ``PLAY_MEDIA`` (and transport controls) *only* when at least one decoder
+   has been configured via Options Flow.
+2. When Music Assistant calls ``play_media`` on a zone, the proxy:
+   a. Claims an idle backend decoder (squeezelite / Cambridge Audio) from
+      the shared :class:`~.decoder_pool.DecoderPool`.
+   b. Wakes the decoder if it is in standby.
+   c. Routes the BTicino matrix to the decoder's physical source input via
+      ``OWNSoundCommand.select_source``.
+   d. Forwards the stream URL to the decoder via the HA service bus.
+3. State, metadata (title, artist, album art), and volume are mirrored from
+   the backend decoder back to the BTicino zone entity so the HA UI and
+   Music Assistant show the correct playback state.
+4. Volume changes on the zone apply **gain staging**: the decoder volume is
+   set to ``zone_volume + pre_gain_offset`` (capped at 1.0) to keep the
+   analog signal level high and the BTicino amplifier gain low, reducing
+   the inherent noise floor of the analog 2-wire bus.
+5. When the zone is turned off, the decoder is released back to the pool.
+
+Backward compatibility
+----------------------
+If no decoders are configured in Options Flow the entity behaves exactly as
+before — it controls the BTicino amplifier zone via WHO=16 commands only.
+``PLAY_MEDIA`` is not advertised and Music Assistant will not try to use it.
+"""
+import asyncio
+
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
     DOMAIN as PLATFORM,
 )
-
 from homeassistant.const import CONF_MAC
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.event import async_track_state_change_event
 
-from .ownd.message import (
-    OWNSoundEvent,
-    OWNSoundCommand,
-)
-
+from .decoder_pool import DecoderPool
+from .ownd.message import OWNSoundEvent, OWNSoundCommand
 from .const import (
+    CONF_DECODER_ENTITY,
+    CONF_DECODER_PRE_GAIN,
+    CONF_DECODER_SLOTS,
+    CONF_DECODER_SOURCE,
     CONF_ENTITY,
     DOMAIN,
     LOGGER,
@@ -24,27 +60,62 @@ from .const import (
 from .myhome_device import MyHOMEEntity
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the MyHOME media player platform dynamically via Discovery."""
-    known_media_players = set()
+def _build_pool(hass: HomeAssistant, config_entry) -> DecoderPool:
+    """Build a :class:`DecoderPool` from the current options entry.
 
-    # Restore previously discovered entities from the Entity Registry so they
-    # are available immediately on restart, even before the gateway responds.
+    Called both from :func:`async_setup_entry` and from the pool-rebuild
+    listener registered in ``__init__.py``.
+
+    Args:
+        hass: Home Assistant instance.
+        config_entry: The active config entry for this MyHOME gateway.
+
+    Returns:
+        A fully configured :class:`DecoderPool` (may have zero decoders if
+        nothing is configured yet).
+    """
+    options = config_entry.options
+    decoder_map: dict[str, int] = {}
+    pre_gain_map: dict[str, int] = {}
+
+    for i in range(1, CONF_DECODER_SLOTS + 1):
+        entity_id = options.get(CONF_DECODER_ENTITY.format(i), "").strip()
+        source_num = options.get(CONF_DECODER_SOURCE.format(i), i)      # int
+        pre_gain = options.get(CONF_DECODER_PRE_GAIN.format(i), 0)      # int
+
+        if entity_id and entity_id.startswith("media_player."):
+            decoder_map[entity_id] = int(source_num)   # always int — never f"Source N"
+            pre_gain_map[entity_id] = int(pre_gain)
+
+    return DecoderPool(hass, decoder_map, pre_gain_map)
+
+
+async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
+    """Set up the MyHOME media player platform and initialise the decoder pool."""
+    known_media_players: set[str] = set()
+
+    # ── Build and store the decoder pool ─────────────────────────────────────
+    pool = _build_pool(hass, config_entry)
+    hass.data[DOMAIN][config_entry.data[CONF_MAC]]["decoder_pool"] = pool
+
+    LOGGER.info(
+        "MyHOME media player: decoder pool initialised with %d decoder(s)",
+        len(pool.decoder_entity_ids),
+    )
+
+    # ── Restore previously discovered entities from the Entity Registry ───────
     entity_registry = er.async_get(hass)
     existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
-    restored_players = []
+    restored_players: list[MyHOMEMediaPlayer] = []
 
     gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
 
     for entry in existing_entries:
         if entry.domain == PLATFORM:
             unique_id = entry.unique_id
-            # unique_id format: "{mac}-{who}-{device_id}" where device_id = "{zone}#16"
             after_mac = unique_id.replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
-            # after_mac is "{who}-{zone}#16" e.g. "16-22#16" — strip the who prefix
             parts = after_mac.split("-", 1)
             device_id = parts[-1] if len(parts) > 1 else after_mac
-            # device_id is "{zone}#16" e.g. "22#16"
             zone = device_id.replace("#16", "")
 
             _player = MyHOMEMediaPlayer(
@@ -64,6 +135,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     if restored_players:
         async_add_entities(restored_players)
 
+    # ── Discovery listener ────────────────────────────────────────────────────
     @callback
     def async_add_media_player(message):
         """Add a media player from a discovered message."""
@@ -105,17 +177,27 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         )
     )
 
+
 async def async_unload_entry(hass, config_entry):
     """Unload media player platform."""
     return True
 
 
 class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
-    """MyHome media player."""
+    """MyHome media player with optional Dynamic Proxy for streaming services.
+
+    When decoders are configured via Options Flow this entity acts as a proxy:
+    it intercepts ``play_media`` calls from Music Assistant / Spotify, claims
+    an idle backend decoder, routes the BTicino analog matrix, and mirrors
+    playback state back to the zone UI.
+
+    Without decoders configured it behaves exactly like the original entity —
+    full WHO=16 hardware control with no streaming features advertised.
+    """
 
     def __init__(
         self,
-        hass,
+        hass: HomeAssistant,
         name: str,
         entity_name: str,
         device_id: str,
@@ -124,7 +206,8 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
         manufacturer: str,
         model: str,
         gateway,
-    ):
+    ) -> None:
+        """Initialise the MyHOME media player entity."""
         super().__init__(
             hass=hass,
             name=name,
@@ -137,7 +220,19 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             gateway=gateway,
         )
 
+        # ── Base hardware state ────────────────────────────────────────────
+        self._attr_state = MediaPlayerState.OFF
+        self._attr_source_list = ["Source 1", "Source 2", "Source 3", "Source 4"]
+        self._attr_source = None
+        self._attr_volume_level = None
+        self._attr_is_volume_muted = False
 
+        # ── Proxy state ────────────────────────────────────────────────────
+        self._active_decoder: str | None = None  # entity_id of the claimed decoder
+        self._syncing_volume: bool = False        # guard flag — prevents volume feedback loop
+        self._pre_mute_volume: float | None = None  # volume to restore on unmute
+
+        # ── Base hardware features (always available) ──────────────────────
         self._attr_supported_features = (
             MediaPlayerEntityFeature.TURN_ON
             | MediaPlayerEntityFeature.TURN_OFF
@@ -146,16 +241,47 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.SELECT_SOURCE
         )
-        
-        self._attr_state = MediaPlayerState.OFF
-        self._attr_source_list = ["Source 1", "Source 2", "Source 3", "Source 4"]
-        self._attr_source = None
-        self._attr_volume_level = None
-        self._attr_is_volume_muted = False
-        self._pre_mute_volume = None
 
-    async def async_added_to_hass(self):
-        """Run when entity about to be added to hass."""
+    # ── Pool helpers ──────────────────────────────────────────────────────────
+
+    def _get_pool(self) -> DecoderPool | None:
+        """Return the shared :class:`DecoderPool` from ``hass.data``.
+
+        Returns ``None`` if the pool has not yet been initialised (e.g.
+        during early startup) or if no decoders are configured.
+        """
+        mac_data = self.hass.data.get(DOMAIN, {}).get(self._gateway_handler.mac, {})
+        return mac_data.get("decoder_pool")
+
+    # ── Dynamic feature flags ─────────────────────────────────────────────────
+
+    @property
+    def supported_features(self) -> MediaPlayerEntityFeature:
+        """Return supported features, adding streaming controls when decoders are configured.
+
+        Music Assistant inspects ``supported_features`` to decide whether this
+        entity is a valid playback target.  Streaming features are only
+        advertised when at least one decoder is configured, which keeps the
+        entity backward-compatible for users without a streaming setup.
+        """
+        features = self._attr_supported_features
+        pool = self._get_pool()
+        if pool and pool.is_configured:
+            features |= (
+                MediaPlayerEntityFeature.PLAY_MEDIA
+                | MediaPlayerEntityFeature.PAUSE
+                | MediaPlayerEntityFeature.PLAY
+                | MediaPlayerEntityFeature.STOP
+                | MediaPlayerEntityFeature.NEXT_TRACK
+                | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            )
+        return features
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    async def async_added_to_hass(self) -> None:
+        """Register listeners when entity is added to Home Assistant."""
+        # Existing OWN event dispatcher connections
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -171,65 +297,407 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             )
         )
 
-    @callback
-    def handle_global_source_event(self, message):
-        """Intercept global source change events to update UI."""
-        if isinstance(message, OWNSoundEvent) and message.is_source_event:
-            if message.is_on:
-                self._attr_source = f"Source {message.source_id}"
-                self.async_schedule_update_ha_state()
+        # ── Decoder state listener ────────────────────────────────────────
+        pool = self._get_pool()
+        if pool and pool.is_configured:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    pool.decoder_entity_ids,
+                    self._async_decoder_state_changed,
+                )
+            )
 
-    async def async_update(self):
-        """Update the entity."""
-        await self._gateway_handler.send_status_request(OWNSoundCommand.status(self._where))
+    # ── Proxy: play_media ─────────────────────────────────────────────────────
 
-    async def async_turn_on(self, **kwargs):
-        """Turn the media player on."""
+    async def async_play_media(self, media_type: str, media_id: str, **kwargs) -> None:
+        """Intercept a Music Assistant / Spotify play command and route it.
+
+        Steps
+        -----
+        1. Claim an idle decoder from the pool (thread-safe).
+        2. Wake the decoder if it is in standby / off.
+        3. Turn on the BTicino zone amplifier and route the matrix to the
+           decoder's source input.
+        4. Forward the stream URL to the backend decoder.
+
+        Args:
+            media_type: The media content type (e.g. ``"music"``, ``"internet_radio"``).
+            media_id: The stream URL or content identifier.
+            **kwargs: Additional kwargs forwarded to the decoder's play_media call
+                (e.g. ``announce``, ``enqueue``, ``extra``).
+
+        Raises:
+            HomeAssistantError: If all decoders are busy or the decoder fails
+                to start playback.
+        """
+        pool = self._get_pool()
+        if not pool or not pool.is_configured:
+            LOGGER.warning(
+                "%s: play_media called but no decoders configured — ignoring",
+                self.entity_id,
+            )
+            return
+
+        # 1. Claim an idle decoder (thread-safe via asyncio.Lock)
+        result = await pool.claim(self.entity_id)
+        if result is None:
+            raise HomeAssistantError(
+                f"{self.entity_id}: All audio matrix inputs are currently in use by other rooms!"
+            )
+        decoder_id, source_num = result
+        self._active_decoder = decoder_id
+
+        # 2. Wake the decoder if it is in standby or off
+        dec_state = self.hass.states.get(decoder_id)
+        if dec_state and dec_state.state in (MediaPlayerState.OFF, MediaPlayerState.STANDBY):
+            await self.hass.services.async_call(
+                "media_player", "turn_on", {"entity_id": decoder_id}
+            )
+            # Poll until the decoder wakes up (max 5 seconds)
+            for _ in range(10):
+                await asyncio.sleep(0.5)
+                dec_state = self.hass.states.get(decoder_id)
+                if dec_state and dec_state.state not in (
+                    MediaPlayerState.OFF,
+                    MediaPlayerState.STANDBY,
+                ):
+                    break
+            else:
+                LOGGER.warning(
+                    "%s: decoder %s did not wake up within 5 s",
+                    self.entity_id,
+                    decoder_id,
+                )
+
+        # 3. Turn on the BTicino zone amplifier and route to the correct source
+        if self._attr_state != MediaPlayerState.ON:
+            await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
+
+        # source_num is an int direct from the pool — pass as string to the OWN command
+        await self._gateway_handler.send(
+            OWNSoundCommand.select_source(self._where, str(source_num))
+        )
+
+        # 4. Forward the stream URL to the backend decoder
+        service_data: dict = {
+            "entity_id": decoder_id,
+            "media_content_type": media_type,
+            "media_content_id": media_id,
+        }
+        for key in ("announce", "enqueue", "extra"):
+            if key in kwargs:
+                service_data[key] = kwargs[key]
+
+        # Error recovery: if the play_media call fails, release the decoder so
+        # it does not remain permanently "stuck" as busy.
+        try:
+            await self.hass.services.async_call("media_player", "play_media", service_data)
+        except Exception as err:  # pylint: disable=broad-except
+            LOGGER.error(
+                "%s: failed to forward play_media to %s: %s — releasing decoder",
+                self.entity_id,
+                decoder_id,
+                err,
+            )
+            await pool.release(self.entity_id)
+            self._active_decoder = None
+            raise HomeAssistantError(
+                f"{self.entity_id}: decoder {decoder_id} failed to start playback: {err}"
+            ) from err
+
+        self.async_schedule_update_ha_state()
+
+    # ── Transport controls ────────────────────────────────────────────────────
+
+    async def _forward_to_decoder(self, service: str) -> None:
+        """Forward a media_player service call to the active backend decoder.
+
+        Args:
+            service: HA service name e.g. ``"media_pause"``.
+        """
+        if self._active_decoder:
+            await self.hass.services.async_call(
+                "media_player", service, {"entity_id": self._active_decoder}
+            )
+
+    async def async_media_pause(self) -> None:
+        """Pause playback on the active decoder."""
+        await self._forward_to_decoder("media_pause")
+
+    async def async_media_play(self) -> None:
+        """Resume playback on the active decoder."""
+        await self._forward_to_decoder("media_play")
+
+    async def async_media_stop(self) -> None:
+        """Stop playback on the active decoder."""
+        await self._forward_to_decoder("media_stop")
+
+    async def async_media_next_track(self) -> None:
+        """Skip to next track on the active decoder."""
+        await self._forward_to_decoder("media_next_track")
+
+    async def async_media_previous_track(self) -> None:
+        """Go to previous track on the active decoder."""
+        await self._forward_to_decoder("media_previous_track")
+
+    # ── Zone on / off ─────────────────────────────────────────────────────────
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Turn the zone amplifier on."""
         await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
 
-    async def async_turn_off(self, **kwargs):
-        """Turn the media player off."""
+    async def async_turn_off(self, **kwargs) -> None:
+        """Turn the zone amplifier off and release any claimed decoder.
+
+        Stops playback on the decoder before releasing it so that it returns
+        to the idle pool in a clean state.
+        """
         await self._gateway_handler.send(OWNSoundCommand.turn_off(self._where))
 
-    async def async_volume_up(self):
-        """Volume up."""
+        if self._active_decoder:
+            # Stop playback on the decoder first
+            try:
+                await self.hass.services.async_call(
+                    "media_player", "media_stop", {"entity_id": self._active_decoder}
+                )
+            except Exception:  # pylint: disable=broad-except
+                pass  # Best-effort — don't prevent turn-off if the decoder is unreachable
+
+            pool = self._get_pool()
+            if pool:
+                await pool.release(self.entity_id)
+            self._active_decoder = None
+
+        self.async_schedule_update_ha_state()
+
+    # ── Volume control ────────────────────────────────────────────────────────
+
+    async def async_volume_up(self) -> None:
+        """Increase zone volume one step."""
         await self._gateway_handler.send(OWNSoundCommand.volume_up(self._where))
 
-    async def async_volume_down(self):
-        """Volume down."""
+    async def async_volume_down(self) -> None:
+        """Decrease zone volume one step."""
         await self._gateway_handler.send(OWNSoundCommand.volume_down(self._where))
 
     async def async_set_volume_level(self, volume: float) -> None:
-        """Set volume level, range 0..1."""
-        # Unmute automatically if user slides volume up
+        """Set zone volume and apply gain staging to the active decoder.
+
+        Gain staging strategy
+        ---------------------
+        Keep the decoder volume proportionally higher than the BTicino zone
+        volume to maximise signal level in the analog chain and minimise
+        amplification of the bus noise floor.
+
+        Decoder volume = ``min(1.0, zone_volume + pre_gain / 100)``.
+
+        The ``_syncing_volume`` flag prevents a feedback loop:
+        ``zone.set_volume → decoder.volume_set → state_changed event
+        → zone._async_decoder_state_changed → zone.set_volume → …``
+
+        Args:
+            volume: Target volume in the range 0.0–1.0.
+        """
+        # Auto-unmute if the user slides the volume up
         if self._attr_is_volume_muted and volume > 0:
             self._attr_is_volume_muted = False
 
-        # Convert float (0.0 - 1.0) to hardware scale (0 - 31)
+        # BTicino hardware uses a 0–31 integer scale
         hw_volume = int(round(volume * 31.0))
         await self._gateway_handler.send(OWNSoundCommand.set_volume(self._where, hw_volume))
 
+        # Gain staging: keep decoder louder than the BTicino analog stage
+        if self._active_decoder:
+            pool = self._get_pool()
+            if pool:
+                pre_gain_pct = pool.get_pre_gain(self._active_decoder)
+                decoder_volume = min(1.0, volume + pre_gain_pct / 100.0)
+                self._syncing_volume = True
+                try:
+                    await self.hass.services.async_call(
+                        "media_player",
+                        "volume_set",
+                        {
+                            "entity_id": self._active_decoder,
+                            "volume_level": decoder_volume,
+                        },
+                    )
+                finally:
+                    self._syncing_volume = False
+
     async def async_mute_volume(self, mute: bool) -> None:
-        """Mute or unmute the media player."""
+        """Mute or unmute the zone and propagate to the active decoder.
+
+        Muting is emulated by driving the BTicino zone volume to 0 (or
+        restoring it).  If the active decoder supports hardware mute, that is
+        also applied for immediate effect.
+
+        Args:
+            mute: ``True`` to mute, ``False`` to unmute.
+        """
         if mute:
             self._pre_mute_volume = self._attr_volume_level if self._attr_volume_level is not None else 0.5
             await self.async_set_volume_level(0.0)
         else:
             restore_volume = self._pre_mute_volume if self._pre_mute_volume is not None else 0.3
             await self.async_set_volume_level(restore_volume)
-        
+
         self._attr_is_volume_muted = mute
+
+        # Propagate mute to decoder if it supports the attribute
+        if self._active_decoder:
+            dec_state = self.hass.states.get(self._active_decoder)
+            if dec_state and dec_state.attributes.get("is_volume_muted") is not None:
+                try:
+                    await self.hass.services.async_call(
+                        "media_player",
+                        "volume_mute",
+                        {"entity_id": self._active_decoder, "is_volume_muted": mute},
+                    )
+                except Exception:  # pylint: disable=broad-except
+                    pass  # Not all decoders support mute; volume=0 covers the rest
+
         self.async_schedule_update_ha_state()
 
-    async def async_select_source(self, source: str):
-        """Select input source."""
+    # ── Source selection ──────────────────────────────────────────────────────
+
+    async def async_select_source(self, source: str) -> None:
+        """Select a BTicino source input manually.
+
+        Args:
+            source: Source label, e.g. ``"Source 1"``.
+        """
         if source in self._attr_source_list:
             source_id = source.split(" ")[1]
-            await self._gateway_handler.send(OWNSoundCommand.select_source(self._where, source_id))
+            await self._gateway_handler.send(
+                OWNSoundCommand.select_source(self._where, source_id)
+            )
+
+    # ── State and metadata mirroring ──────────────────────────────────────────
+
+    @property
+    def state(self) -> MediaPlayerState:
+        """Mirror the decoder's playback state when streaming.
+
+        When the zone is actively streaming (``_active_decoder`` is set), the
+        playback state (PLAYING, PAUSED, BUFFERING, IDLE) is mirrored from the
+        decoder.  The zone's own ON/OFF state (from BTicino hardware events)
+        is used as the fallback.
+        """
+        if self._attr_state == MediaPlayerState.OFF:
+            return MediaPlayerState.OFF
+        if self._active_decoder:
+            dec_state = self.hass.states.get(self._active_decoder)
+            if dec_state and dec_state.state in (
+                MediaPlayerState.PLAYING,
+                MediaPlayerState.PAUSED,
+                MediaPlayerState.BUFFERING,
+                MediaPlayerState.IDLE,
+            ):
+                return dec_state.state  # type: ignore[return-value]
+        return self._attr_state
+
+    @property
+    def media_title(self) -> str | None:
+        """Return the current track title from the active decoder."""
+        return self._get_decoder_attr("media_title")
+
+    @property
+    def media_artist(self) -> str | None:
+        """Return the current artist name from the active decoder."""
+        return self._get_decoder_attr("media_artist")
+
+    @property
+    def media_album_name(self) -> str | None:
+        """Return the current album name from the active decoder."""
+        return self._get_decoder_attr("media_album_name")
+
+    @property
+    def entity_picture(self) -> str | None:
+        """Return the album art URL from the active decoder."""
+        return self._get_decoder_attr("entity_picture")
+
+    def _get_decoder_attr(self, attr: str):
+        """Read an attribute from the active decoder's current HA state.
+
+        Args:
+            attr: The state attribute name (e.g. ``"media_title"``).
+
+        Returns:
+            The attribute value, or ``None`` if no decoder is active or the
+            attribute is not present.
+        """
+        if self._active_decoder:
+            dec_state = self.hass.states.get(self._active_decoder)
+            if dec_state:
+                return dec_state.attributes.get(attr)
+        return None
+
+    # ── Decoder state change listener ─────────────────────────────────────────
 
     @callback
-    def handle_event(self, message: OWNSoundEvent):
-        """Handle an event message."""
+    def _async_decoder_state_changed(self, event) -> None:
+        """Update UI when the active decoder changes playback state or volume.
+
+        This fires whenever *any* configured decoder changes state (all are
+        tracked).  The handler ignores events from decoders that are not
+        currently assigned to this zone.
+
+        Volume reverse-sync
+        -------------------
+        If the user changes the decoder volume externally (e.g. in the
+        Cambridge StreamMagic app), the zone UI is updated to reflect the
+        approximate zone volume (decoder_volume − pre_gain_offset).
+
+        The ``_syncing_volume`` flag suppresses this path when the change was
+        triggered by our own ``async_set_volume_level`` to avoid a feedback
+        loop.
+        """
+        if not self._active_decoder:
+            return
+        if event.data.get("entity_id") != self._active_decoder:
+            return
+
+        if not self._syncing_volume:
+            new_state = event.data.get("new_state")
+            if new_state:
+                ext_vol = new_state.attributes.get("volume_level")
+                if ext_vol is not None and self._attr_volume_level != ext_vol:
+                    pool = self._get_pool()
+                    if pool:
+                        pre_gain_pct = pool.get_pre_gain(self._active_decoder)
+                        # Reverse the pre_gain offset to get approximate zone volume
+                        zone_vol = max(0.0, float(ext_vol) - pre_gain_pct / 100.0)
+                        self._attr_volume_level = zone_vol
+
+        self.async_schedule_update_ha_state()
+
+    # ── BTicino OWN event handlers ────────────────────────────────────────────
+
+    async def async_update(self) -> None:
+        """Request a status update from the gateway."""
+        await self._gateway_handler.send_status_request(OWNSoundCommand.status(self._where))
+
+    @callback
+    def handle_global_source_event(self, message) -> None:
+        """Intercept global source change events to update the source indicator.
+
+        Args:
+            message: An :class:`~.ownd.message.OWNSoundEvent` received from the gateway.
+        """
+        if isinstance(message, OWNSoundEvent) and message.is_source_event:
+            if message.is_on:
+                self._attr_source = f"Source {message.source_id}"
+                self.async_schedule_update_ha_state()
+
+    @callback
+    def handle_event(self, message: OWNSoundEvent) -> None:
+        """Handle a zone-specific OWN event (on/off/volume).
+
+        Args:
+            message: An :class:`~.ownd.message.OWNSoundEvent` for this zone.
+        """
         LOGGER.info(
             "%s %s",
             self._gateway_handler.log_id,
@@ -242,7 +710,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
 
         if message.volume is not None:
             self._attr_volume_level = message.volume / 31.0
-            # Auto-sync mute state if physical intervention drops volume to 0 or raises it
+            # Sync mute state if physical intervention drives volume to 0 / above 0
             if message.volume == 0 and not self._attr_is_volume_muted:
                 self._attr_is_volume_muted = True
             elif message.volume > 0 and self._attr_is_volume_muted:

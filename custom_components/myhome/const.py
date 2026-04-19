@@ -46,3 +46,11 @@ CONF_SHORT_PRESS = "pushbutton_short_press"
 CONF_SHORT_RELEASE = "pushbutton_short_release"
 CONF_LONG_PRESS = "pushbutton_long_press"
 CONF_LONG_RELEASE = "pushbutton_long_release"
+
+# ── Decoder pool (Dynamic Proxy for Music Assistant / Spotify) ──────────────
+# Up to 4 decoder slots, one per BTicino physical source input.
+# Keys follow the pattern: decoder_{n}_{field}, n = 1..4
+CONF_DECODER_ENTITY = "decoder_{}_entity"     # HA media_player entity_id
+CONF_DECODER_SOURCE = "decoder_{}_source"     # BTicino source number (int 1-4)
+CONF_DECODER_PRE_GAIN = "decoder_{}_pre_gain" # Volume offset % added to decoder (0-50)
+CONF_DECODER_SLOTS = 4                        # Maximum number of decoder slots

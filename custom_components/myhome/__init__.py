@@ -13,6 +13,10 @@ from homeassistant.const import CONF_HOST, CONF_MAC
 from .const import (
     ATTR_GATEWAY,
     ATTR_MESSAGE,
+    CONF_DECODER_ENTITY,
+    CONF_DECODER_PRE_GAIN,
+    CONF_DECODER_SLOTS,
+    CONF_DECODER_SOURCE,
     CONF_PLATFORMS,
     CONF_ENTITY,
     CONF_ENTITIES,
@@ -170,6 +174,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # ── Register options reload listener (rebuilds decoder pool on UI save) ──
+    async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Rebuild the decoder pool when the user saves new options via the UI.
+
+        Releases all active decoder assignments first so that no zone is left
+        with a stale claim.  The user will need to re-trigger playback after
+        changing decoder config.
+        """
+        from .decoder_pool import DecoderPool
+
+        mac = entry.data[CONF_MAC]
+        old_pool = hass.data.get(DOMAIN, {}).get(mac, {}).get("decoder_pool")
+        if old_pool:
+            await old_pool.release_all()
+
+        options = entry.options
+        decoder_map: dict[str, int] = {}
+        pre_gain_map: dict[str, int] = {}
+        for i in range(1, CONF_DECODER_SLOTS + 1):
+            entity_id = options.get(CONF_DECODER_ENTITY.format(i), "").strip()
+            source_num = options.get(CONF_DECODER_SOURCE.format(i), i)
+            pre_gain = options.get(CONF_DECODER_PRE_GAIN.format(i), 0)
+            if entity_id and entity_id.startswith("media_player."):
+                decoder_map[entity_id] = int(source_num)
+                pre_gain_map[entity_id] = int(pre_gain)
+
+        pool = DecoderPool(hass, decoder_map, pre_gain_map)
+        hass.data[DOMAIN][mac]["decoder_pool"] = pool
+        LOGGER.info(
+            "MyHOME: decoder pool rebuilt after options update — %d decoder(s) configured",
+            len(decoder_map),
+        )
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     gateway.listening_worker = entry.async_create_background_task(
         hass, gateway.listening_loop(), name=f"myhome_{entry.entry_id}_listen"

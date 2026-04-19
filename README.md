@@ -17,20 +17,45 @@ Modernized MyHOME Custom Component for Home Assistant
    - **Absolute Volume Tracking:** Full support for dimension messages (`*#16*where*#1*vol##`), normalizing the 0–31 hardware scale automatically.
    - **Software Mute Emulation:** Since OpenWebNet lacks a native audio Mute function, this integration fully emulates local muting, keeping physical volume levels accurately cached.
 
-3. **Auto-Detect Dimmable Lights:**
+3. **🎵 Dynamic Proxy — Stream Music to Your BTicino Zones:**
+   The BTicino audio matrix (F441, S0105A) is a **hardware-only analog switch** — it cannot decode IP-based audio streams on its own. This integration bridges that gap with a *Dynamic Proxy* that lets you stream from **Music Assistant**, **Spotify Connect**, or any HA-compatible media source to your wired BTicino zones.
+
+   **How it works (automatically):**
+   1. You configure one or more *decoders* (network media players physically connected to the matrix source inputs) via the Options UI.
+   2. When Music Assistant or Spotify sends `play_media` to a BTicino zone, the proxy claims an idle decoder, wakes it, routes the matrix to the correct source input, and forwards the stream.
+   3. Playback state (title, artist, album art) is mirrored back from the decoder to the zone entity in real time.
+   4. When the zone is turned off, the decoder is released back to the pool for other zones.
+
+   **Compatible decoders:**
+   Any HA-integrated `media_player` entity with network streaming capability:
+   - **squeezelite / piCorePlayer** — Free, runs on any Raspberry Pi with a DAC HAT (e.g. HiFiBerry DAC+). Discovered automatically by Music Assistant.
+   - **Cambridge Audio** (CXN, etc.) — High-end network streamer with HA integration. Works with `internet_radio` content type since HA 2024.11.
+   - **WiiM Mini / Pro** — Budget-friendly network streamer with AirPlay and HA support.
+   - Any DLNA, Chromecast, or AirPlay-capable device exposed as a `media_player` in HA.
+
+   **Key features:**
+   | Feature | Description |
+   |---|---|
+   | Thread-safe pool | `asyncio.Lock`-protected `DecoderPool` prevents race conditions when multiple zones compete for the same decoder |
+   | Up to 4 simultaneous streams | One decoder per physical source input (F441 has 4 inputs) |
+   | Gain staging (anti-hiss) | Per-decoder `pre_gain` offset keeps the analog signal level high and the amplifier gain low, reducing bus noise |
+   | Backward compatible | If no decoders are configured, the entity behaves exactly as before — `PLAY_MEDIA` is not advertised |
+   | Auto-reload | Changing decoder config in Options UI rebuilds the pool without restarting HA |
+
+4. **Auto-Detect Dimmable Lights:**
    Dimmers are automatically recognized from the OpenWebNet protocol. When the gateway sends a brightness level or brightness preset event, the light entity is promoted from simple on/off to full brightness control with transition support. No manual configuration needed — the integration learns from the bus traffic. A `customize.yaml` fallback is still supported for manual overrides.
 
-4. **Smart Gateway Configuration:**
+5. **Smart Gateway Configuration:**
    The custom setup flow first attempts to auto-discover the gateway's MAC address and model by fetching the UPnP device descriptor directly from known BTicino ports (`http://<IP>:49153/description.xml`). If the gateway does not support UPnP (e.g., older MH200 models), a manual fallback step is presented instead. This eliminates the need to manually look up the MAC address for most modern gateways (F454, MH202, MH201).
 
-5. **MH200 & Stability Hardening:**
+6. **MH200 & Stability Hardening:**
    Resolved the fatal "Listener Death" bugs prevalent in the original library. 
    - Strict 120-second active watchdogs drop permanently hung TCP sockets efficiently.
    - Exponential Backoff routines (`2s -> 60s`) guard against embedded gateway DDoS on power restoration.
    - Polling queries (`SCAN_INTERVAL`) drastically reduced by default for passive sensors.
    - Native integration caching (`ConfigEntryNotReady`) entirely eliminates the infamous "Restart required on first installation" crash loop.
 
-6. **Robust Entity Migration & Registry Integrity:**
+7. **Robust Entity Migration & Registry Integrity:**
    The integration includes self-healing logic for entity IDs. On startup, it automatically detects and corrects orphaned or mis-named entities from previous installations, reverting entity IDs back to the standard `light.light_XX` / `cover.cover_XX` format. Legacy `customize.yaml` friendly names are transparently absorbed and applied without requiring any manual re-configuration.
 
 ## ⚙️ Installation & Configuration
@@ -71,6 +96,30 @@ Audio zones are automatically discovered as `media_player` entities when any sou
 
 For **manual OWN commands** (e.g., via the `myhome.send_message` service), refer to the OpenWebNet specification for WHO=16.
 
+### 5. Setting Up Streaming (Dynamic Proxy)
+
+To stream from Music Assistant, Spotify Connect, or other services to your BTicino audio zones, you need at least one **decoder** — a network media player physically connected to one of the matrix source inputs via RCA or 3.5mm.
+
+#### Prerequisites
+- A BTicino audio matrix (F441, S0105A, or similar) with at least one free source input
+- A network-capable media player wired to that input, integrated into Home Assistant as a `media_player` entity
+
+#### Configuration
+1. Go to **Settings → Devices & Services → MyHOME → Configure**.
+2. Scroll to the **Decoder** section.
+3. For each connected decoder, fill in:
+   - **Entity:** The `media_player` entity ID of the decoder (e.g. `media_player.cambridge_audio_cxn`)
+   - **Source:** The BTicino source input number (1–4) the decoder is physically wired to
+   - **Pre-gain:** A volume offset percentage (0–50) to optimise the analog signal-to-noise ratio. Recommended values:
+     - `0` for decoders with fixed line-level output (e.g. Cambridge Audio with Pre-Amp OFF)
+     - `15–20` for software-level decoders (e.g. squeezelite on a HiFiBerry DAC)
+     - Higher values for particularly noisy setups — start at `30` and reduce if the decoder clips
+
+4. Click **Submit**. The decoder pool is rebuilt immediately without restarting HA.
+
+#### Gain staging explained
+The BTicino 2-wire bus introduces inherent analog noise. The `pre_gain` setting drives the decoder volume proportionally higher than the zone volume (`decoder_vol = zone_vol + pre_gain/100`, capped at 1.0), keeping the analog signal level high while reducing the amplifier's noise floor amplification. The result is cleaner audio at lower listening volumes.
+
 ### Advanced Usage & Protocol Handling
 
 The underlying OpenWebNet (`OWNd`) package has been exclusively vendored natively into this component (`custom_components/myhome/ownd`), allowing complete downstream control over exact OpenWebNet protocol implementations to maximize reliability.
@@ -82,5 +131,32 @@ The underlying OpenWebNet (`OWNd`) package has been exclusively vendored nativel
 | MH202 / MH201 | ✅ | Full UPnP support |
 | MH200 | ❌ | Manual MAC entry required; no UPnP descriptor |
 | MyHomeServer1 | ✅ | Should work via SSDP |
+
+| Audio Matrix | Decoder Support | Source Inputs |
+|---|---|---|
+| F441 / F441M | ✅ | 4 stereo inputs |
+| S0105A | ✅ | 4 stereo inputs |
+| E46ADCN (amplifier) | ✅ | Receives from matrix |
+
+#### Architecture: Dynamic Proxy
+
+```
+┌──────────────────┐     ┌───────────────┐     ┌──────────────────┐
+│  Music Assistant  │     │  DecoderPool  │     │   F441M Matrix   │
+│  / Spotify / MA   │────▶│  (asyncio)    │────▶│   (hardware)     │
+│                   │     │               │     │                  │
+│  play_media()     │     │  claim()      │     │  select_source() │
+│                   │     │  release()    │     │                  │
+└──────────────────┘     │  gain_stage() │     │  IN1 ──▶ Zone 3  │
+                          └───────────────┘     │  IN2 ──▶ Zone 4  │
+                                ▲               │  IN3 ──▶ Zone 5  │
+                                │               │  IN4 ──▶ Zone 6  │
+                          ┌─────┴──────┐        └──────────────────┘
+                          │  Decoders   │
+                          │             │
+                          │ Cambridge   │──── RCA ───▶ IN1
+                          │ squeezelite │──── RCA ───▶ IN2
+                          └─────────────┘
+```
 
 *(For legacy OpenWebNet implementation documentation, refer to the original bticino open specs).*
