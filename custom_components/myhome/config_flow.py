@@ -477,11 +477,20 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
 
         if user_input is not None:
             # ── Validate decoder entity IDs ───────────────────────────────
+            from homeassistant.helpers import entity_registry as er
+            registry = er.async_get(self.hass)
+
             for i in range(1, CONF_DECODER_SLOTS + 1):
                 entity_key = CONF_DECODER_ENTITY.format(i)
                 entity_val = user_input.get(entity_key, "").strip()
-                if entity_val and not entity_val.startswith("media_player."):
-                    errors[entity_key] = "not_a_media_player"
+                if entity_val:
+                    if not entity_val.startswith("media_player."):
+                        errors[entity_key] = "not_a_media_player"
+                    else:
+                        entry = registry.async_get(entity_val)
+                        if entry and entry.platform == "mass":
+                            # Prevent infinite loops by rejecting MA clones
+                            errors[entity_key] = "mass_entity_not_allowed"
 
             if not errors:
                 self.options.update({CONF_WORKER_COUNT: user_input[CONF_WORKER_COUNT]})

@@ -91,7 +91,8 @@
       "invalid_config_path": "Configuration file does not exist at this path",
       "invalid_password": "Invalid password",
       "password_error": "Invalid password",
-      "not_a_media_player": "Must be a media_player entity (e.g. media_player.cambridge_audio_cxn)"
+      "not_a_media_player": "Must be a media_player entity (e.g. media_player.cambridge_audio_cxn)",
+      "mass_entity_not_allowed": "Infinite Loop Protection: Do not select Music Assistant clones! Select the original hardware entity instead."
     }
   }
 }
