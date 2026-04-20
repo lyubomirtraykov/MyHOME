@@ -398,10 +398,8 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
                     decoder_id,
                 )
 
-        # 3. Turn on the BTicino zone amplifier and route to the correct source
-        if self._attr_state != MediaPlayerState.ON:
-            await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
-
+        # 3. Turn on the BTicino zone amplifier and route the matrix to the
+        #    decoder's source input. (For Stereo hardware, select_source acts as TURN_ON)
         # source_num is an int direct from the pool — pass as string to the OWN command
         await self._gateway_handler.send(
             OWNSoundCommand.select_source(self._where, str(source_num))
@@ -735,6 +733,11 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             self._attr_state = MediaPlayerState.ON
         elif message.is_off:
             self._attr_state = MediaPlayerState.OFF
+            if self._active_decoder:
+                pool = self._get_pool()
+                if pool:
+                    self.hass.async_create_task(pool.release(self.entity_id))
+                self._active_decoder = None
 
         if message.volume is not None:
             self._attr_volume_level = message.volume / 31.0
