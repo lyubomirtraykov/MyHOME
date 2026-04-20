@@ -142,7 +142,17 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         if not hasattr(message, "zone") or not message.zone:
             return
 
-        zone = message.zone
+        # Do not discover native sources (e.g. 101, 102, 103, 104)
+        if getattr(message, "is_source_event", False):
+            return
+
+        zone = str(message.zone)
+
+        # Do not discover stereo module pseudo-zones used for source selection
+        # (e.g. 11x, 12x, 13x, 14x representing source 1-4 for zone x)
+        if len(zone) == 3 and zone[:2] in ("11", "12", "13", "14"):
+            return
+
         unique_id = f"{zone}#16"
 
         if unique_id not in known_media_players:
