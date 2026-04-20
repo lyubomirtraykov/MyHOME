@@ -399,7 +399,15 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
                 )
 
         # 3. Turn on the BTicino zone amplifier and route the matrix to the
-        #    decoder's source input. (For Stereo hardware, select_source acts as TURN_ON)
+        #    decoder's source input.
+        if self._attr_state != MediaPlayerState.ON:
+            await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
+            # The hardware relays need time to wake up and latch before we
+            # can forcefully command a source switch, otherwise the source
+            # command gets dropped by the sleeping matrix (causing a hiss).
+            import asyncio
+            await asyncio.sleep(1.5)
+
         # source_num is an int direct from the pool — pass as string to the OWN command
         await self._gateway_handler.send(
             OWNSoundCommand.select_source(self._where, str(source_num))
