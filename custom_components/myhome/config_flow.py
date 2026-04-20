@@ -32,7 +32,7 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, selector
 from .ownd.connection import OWNGateway, OWNSession
 from .ownd.discovery import find_gateways, get_gateway
 
@@ -540,10 +540,20 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             entity_key = CONF_DECODER_ENTITY.format(i)
             source_key = CONF_DECODER_SOURCE.format(i)
             gain_key = CONF_DECODER_PRE_GAIN.format(i)
-            schema_dict[vol.Optional(
-                entity_key,
-                description={"suggested_value": self.options.get(entity_key, "")},
-            )] = str
+            
+            _entity_val = self.options.get(entity_key, "")
+            if _entity_val:
+                schema_dict[vol.Optional(
+                    entity_key,
+                    description={"suggested_value": _entity_val},
+                )] = selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["media_player"])
+                )
+            else:
+                schema_dict[vol.Optional(entity_key)] = selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["media_player"])
+                )
+                
             schema_dict[vol.Optional(
                 source_key,
                 description={"suggested_value": self.options.get(source_key, i)},
