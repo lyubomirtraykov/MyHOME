@@ -148,10 +148,21 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
         zone = str(message.zone)
 
-        # Do not discover stereo module pseudo-zones used for source selection
-        # (e.g. 11x, 12x, 13x, 14x representing source 1-4 for zone x)
+        # Intercept stereo module pseudo-zones used for source selection
+        # (e.g. 11x, 12x, 13x, 14x representing source 1-4 for zone 2x)
         if len(zone) == 3 and zone[:2] in ("11", "12", "13", "14"):
+            target_zone = f"2{zone[-1]}"
+            async_dispatcher_send(
+                hass, 
+                f"myhome_update_{config_entry.data[CONF_MAC]}_16_{target_zone}#16", 
+                message
+            )
             return
+
+        # Hide global source events (101, 102, etc.) from entity discovery
+        if getattr(message, "is_source_event", False):
+            return
+
 
         unique_id = f"{zone}#16"
 
@@ -299,14 +310,6 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
                 self.handle_event,
             )
         )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                f"myhome_message_{self._gateway_handler.mac}",
-                self.handle_global_source_event,
-            )
-        )
-
         # ── Decoder state listener ────────────────────────────────────────
         pool = self._get_pool()
         if pool and pool.is_configured:
@@ -508,7 +511,13 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the zone amplifier on."""
-        await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
+        source_id = self._attr_source.split(" ")[-1] if self._attr_source else "1"
+        if self._attr_state != MediaPlayerState.ON:
+            await self._gateway_handler.send(OWNSoundCommand.turn_off(self._where))
+            await self._gateway_handler.send(OWNSoundCommand.set_volume(self._where, 31))
+            await self._gateway_handler.send(OWNSoundCommand.set_volume(self._where, 0))
+            await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
+        await self._gateway_handler.send(OWNSoundCommand.select_source(self._where, source_id))
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the zone amplifier off and release any claimed decoder.
@@ -633,6 +642,11 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
         """
         if source in self._attr_source_list:
             source_id = source.split(" ")[1]
+            if self._attr_state != MediaPlayerState.ON:
+                await self._gateway_handler.send(OWNSoundCommand.turn_off(self._where))
+                await self._gateway_handler.send(OWNSoundCommand.set_volume(self._where, 31))
+                await self._gateway_handler.send(OWNSoundCommand.set_volume(self._where, 0))
+                await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
             await self._gateway_handler.send(
                 OWNSoundCommand.select_source(self._where, source_id)
             )
@@ -743,30 +757,15 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
         await self._gateway_handler.send_status_request(OWNSoundCommand.status(self._where))
 
     @callback
-    def handle_global_source_event(self, message) -> None:
-        """Intercept global source change events to update the source indicator.
-
-        Args:
-            message: An :class:`~.ownd.message.OWNSoundEvent` received from the gateway.
-        """
-        if isinstance(message, OWNSoundEvent) and message.is_source_event:
-            if message.is_on:
-                self._attr_source = f"Source {message.source_id}"
-                self.async_schedule_update_ha_state()
-
-    @callback
     def handle_event(self, message: OWNSoundEvent) -> None:
-        """Handle a zone-specific OWN event (on/off/volume).
-
-        Args:
-            message: An :class:`~.ownd.message.OWNSoundEvent` for this zone.
-        """
-        LOGGER.info(
-            "%s %s",
-            self._gateway_handler.log_id,
-            message.human_readable_log,
-        )
-        if message.is_on:
+        """Handle incoming state updates directly from the bus."""
+        zone_str = str(message.zone)
+        # Parse matrix routing events (e.g. 121 -> Route Source 2 to Zone 21)
+        if len(zone_str) == 3 and zone_str[:2] in ("11", "12", "13", "14"):
+            source_num = int(zone_str[1])
+            self._attr_source = f"Source {source_num}"
+            self._attr_state = MediaPlayerState.ON
+        elif message.is_on:
             self._attr_state = MediaPlayerState.ON
         elif message.is_off:
             self._attr_state = MediaPlayerState.OFF
