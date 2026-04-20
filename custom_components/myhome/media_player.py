@@ -399,19 +399,20 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
                 )
 
         # 3. Turn on the BTicino zone amplifier and route the matrix to the
-        #    decoder's source input.
-        if self._attr_state != MediaPlayerState.ON:
-            await self._gateway_handler.send(OWNSoundCommand.turn_on(self._where))
-            # The hardware relays need time to wake up and latch before we
-            # can forcefully command a source switch, otherwise the source
-            # command gets dropped by the sleeping matrix (causing a hiss).
-            import asyncio
-            await asyncio.sleep(1.5)
-
-        # source_num is an int direct from the pool — pass as string to the OWN command
+        #    decoder's source input. (For Stereo hardware, select_source acts as TURN_ON)
+        # We must NOT send the generic turn_on command to stereo zones because it
+        # puts them into an invalid state and causes a loud hardware hiss.
         await self._gateway_handler.send(
             OWNSoundCommand.select_source(self._where, str(source_num))
         )
+
+        # Because the stereo select_source command uses a compound address (e.g., 121), 
+        # the Home Assistant dispatcher for Zone 21 misses the ON event.
+        # We must manually assert the ON state here to prevent Music Assistant from
+        # thinking the zone is OFF and forcefully muting the stream volume to 0.
+        if self._attr_state != MediaPlayerState.ON:
+            self._attr_state = MediaPlayerState.ON
+            self.async_write_ha_state()
 
         # 4. Forward the stream URL to the backend decoder
         service_data: dict = {
