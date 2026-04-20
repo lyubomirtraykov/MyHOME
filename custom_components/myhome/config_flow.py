@@ -547,17 +547,11 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                     entity_key,
                     description={"suggested_value": _entity_val},
                 )] = selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain=["media_player"],
-                        exclude=selector.EntityFilterSelectorConfig(integration="mass")
-                    )
+                    selector.EntitySelectorConfig(domain=["media_player"])
                 )
             else:
                 schema_dict[vol.Optional(entity_key)] = selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain=["media_player"],
-                        exclude=selector.EntityFilterSelectorConfig(integration="mass")
-                    )
+                    selector.EntitySelectorConfig(domain=["media_player"])
                 )
                 
             schema_dict[vol.Optional(
