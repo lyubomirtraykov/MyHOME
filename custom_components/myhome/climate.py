@@ -128,6 +128,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         unique_id = f"{where}#4#{interface}" if interface else str(where)
 
         if unique_id not in known_climate_zones:
+            LOGGER.info(
+                "Auto-detected Zone %s, where= %s.",
+                unique_id, str(where)
+            )
             _climate_zone = MyHOMEClimate(
                 hass=hass,
                 name=f"Climate Zone {unique_id}",
