@@ -116,7 +116,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     @callback
     def async_add_climate_zone(message):
         """Add a climate zone from a discovered message."""
-        if not hasattr(message, "where") or not message.where:
+        if not hasattr(message, "where") or not message.where or message.where == "0":
             return
 
         # Skip groups, areas and general for now, as they represent many physical devices
@@ -128,13 +128,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         unique_id = f"{where}#4#{interface}" if interface else str(where)
 
         if unique_id not in known_climate_zones:
-            LOGGER.info(
-                "Auto-detected Zone %s, where= %s.",
-                unique_id, str(where)
-            )
+            # We found a new climate zone!
+            clean_where = where.split('-')[-1]
+
             _climate_zone = MyHOMEClimate(
                 hass=hass,
-                name=f"Climate Zone {unique_id}",
+                name=f"Climate Zone {clean_where}",
                 device_id=unique_id,
                 who=str(message.who),
                 where=where,
