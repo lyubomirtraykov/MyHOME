@@ -130,7 +130,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         if unique_id not in known_climate_zones:
             _climate_zone = MyHOMEClimate(
                 hass=hass,
-                name=f"Climate Zone {clean_where}",
+                name=f"Climate Zone {unique_id}",
                 device_id=unique_id,
                 who=str(message.who),
                 where=where,
