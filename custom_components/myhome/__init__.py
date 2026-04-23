@@ -65,8 +65,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     
     _domain_to_who = {
         "light": "1",
-        "cover": "2",
         "switch": "1",
+        "cover": "2",
+        "climate": "4",
         "media_player": "16",
     }
     
