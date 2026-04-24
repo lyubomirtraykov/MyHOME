@@ -116,7 +116,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     @callback
     def async_add_climate_zone(message):
         """Add a climate zone from a discovered message."""
-        if not hasattr(message, "where") or not message.where or message.where == "0":
+        if not hasattr(message, "where") or not message.where or message.where == "0" or message.where == "#0":
             return
 
         # Skip groups, areas and general for now, as they represent many physical devices
