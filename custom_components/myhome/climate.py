@@ -243,6 +243,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
 
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
+        await self._gateway_handler.send(OWNHeatingCommand.status(self._where))
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
