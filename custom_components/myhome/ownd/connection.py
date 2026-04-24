@@ -657,21 +657,17 @@ class OWNEventSession(OWNSession):
         """Acts as an entry point to read messages on the event bus.
         It will read one frame and return it as an OWNMessage object"""
         try:
-            # Implement Watchdog: MH200 gateway emits time signals every ~30s. If we hear nothing for 120s, the socket hung natively.
+            # Implement Watchdog: MH200 gateway emits time signals every ~30s. If we hear nothing for 180s, the socket hung natively.
             data = await asyncio.wait_for(
                 self._stream_reader.readuntil(OWNSession.SEPARATOR),
-                timeout=120.0
+                timeout=180.0
             )
             _decoded_data = data.decode()
-            self._logger.debug(
-                "%s - row data",
-                _decoded_data
-            )
             _message = OWNMessage.parse(_decoded_data)
             return _message if _message else _decoded_data
         except asyncio.TimeoutError:
             self._logger.error(
-                "%s No heartbeat received for 120 seconds. Event socket likely hung. Severing connection.",
+                "%s No heartbeat received for 180 seconds. Event socket likely hung. Severing connection.",
                 self._gateway.log_id
             )
             await self.close()
