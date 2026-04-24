@@ -663,6 +663,10 @@ class OWNEventSession(OWNSession):
                 timeout=120.0
             )
             _decoded_data = data.decode()
+            self._logger.debug(
+                "%s - row data",
+                _decoded_data
+            )
             _message = OWNMessage.parse(_decoded_data)
             return _message if _message else _decoded_data
         except asyncio.TimeoutError:
