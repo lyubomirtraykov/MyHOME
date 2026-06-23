@@ -138,7 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         manufacturer=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].manufacturer,
         name=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].name,
         model=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].model,
-        sw_version=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware,
+        sw_version=".".join(str(x) for x in hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware)
+        if isinstance(hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware, list)
+        else str(hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware),
     )
 
     await hass.config_entries.async_forward_entry_setups(
