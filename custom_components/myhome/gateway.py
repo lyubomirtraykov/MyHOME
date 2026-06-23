@@ -1,72 +1,73 @@
 """Code to handle a MyHome Gateway."""
 import asyncio
-from typing import Dict, List
 
-from homeassistant.const import (
-    CONF_ENTITIES,
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PASSWORD,
-    CONF_NAME,
-    CONF_MAC,
-    CONF_FRIENDLY_NAME,
-)
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.switch import (
-    SwitchDeviceClass,
-    DOMAIN as SWITCH,
-)
 from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.cover import DOMAIN as COVER
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    DOMAIN as BINARY_SENSOR,
-)
+from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     DOMAIN as SENSOR,
 )
-from homeassistant.components.climate import DOMAIN as CLIMATE
-
-from OWNd.connection import OWNSession, OWNEventSession, OWNCommandSession, OWNGateway
+from homeassistant.const import (
+    CONF_ENTITIES,
+    CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
+)
+from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_call_later
+from OWNd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
 from OWNd.message import (
-    OWNMessage,
-    OWNLightingEvent,
-    OWNLightingCommand,
-    OWNEnergyEvent,
     OWNAutomationEvent,
-    OWNDryContactEvent,
     OWNAuxEvent,
-    OWNHeatingEvent,
-    OWNHeatingCommand,
-    OWNCENPlusEvent,
     OWNCENEvent,
-    OWNGatewayEvent,
-    OWNGatewayCommand,
+    OWNCENPlusEvent,
     OWNCommand,
+    OWNDryContactEvent,
+    OWNEnergyEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+    OWNMessage,
 )
 
-from .const import (
-    CONF_PLATFORMS,
-    CONF_FIRMWARE,
-    CONF_SSDP_LOCATION,
-    CONF_SSDP_ST,
-    CONF_DEVICE_TYPE,
-    CONF_MANUFACTURER,
-    CONF_MANUFACTURER_URL,
-    CONF_UDN,
-    CONF_SHORT_PRESS,
-    CONF_SHORT_RELEASE,
-    CONF_LONG_PRESS,
-    CONF_LONG_RELEASE,
-    DOMAIN,
-    LOGGER,
-)
-from .myhome_device import MyHOMEEntity
 from .button import (
     DisableCommandButtonEntity,
     EnableCommandButtonEntity,
 )
+from .const import (
+    CONF_DEVICE_TYPE,
+    CONF_FIRMWARE,
+    CONF_LONG_PRESS,
+    CONF_LONG_RELEASE,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
+    CONF_PLATFORMS,
+    CONF_SHORT_PRESS,
+    CONF_SHORT_RELEASE,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_UDN,
+    DOMAIN,
+    LOGGER,
+)
+from .myhome_device import MyHOMEEntity
+
+# Max time a command worker waits for the event session to come up before it
+# gives up (the OWNd connect() already retries internally with backoff).
+EVENT_READY_TIMEOUT = 120
+
+# An event-session outage must persist this long AFTER OWNd has already
+# exhausted its own reconnection attempts (~13-40s) before the entities are
+# marked unavailable. Routine ~58min session recycles recover in <1s and never
+# emit a state-change, so they never reach this. Total perceived outage before
+# entities go unavailable is roughly AVAILABILITY_GRACE + OWNd's give-up window.
+AVAILABILITY_GRACE = 60
 
 
 class MyHOMEGatewayHandler:
@@ -95,8 +96,11 @@ class MyHOMEGatewayHandler:
         self._terminate_listener = False
         self._terminate_sender = False
         self.is_connected = False
-        self.listening_worker: asyncio.tasks.Task = None
-        self.sending_workers: List[asyncio.tasks.Task] = []
+        self._available = True
+        self._unavailable_timer = None
+        self._event_session_ready = asyncio.Event()  # Nuovo evento per sincronizzazione
+        self.listening_worker: asyncio.Task | None = None
+        self.sending_workers: list[asyncio.Task] = []
         self.send_buffer = asyncio.Queue()
 
     @property
@@ -127,7 +131,63 @@ class MyHOMEGatewayHandler:
     def firmware(self) -> str:
         return self.gateway.firmware
 
-    async def test(self) -> Dict:
+    @property
+    def available(self) -> bool:
+        """Filtered availability the entities derive their own from."""
+        return self._available
+
+    @property
+    def availability_signal(self) -> str:
+        """Dispatcher signal fired when the gateway availability changes."""
+        return f"{DOMAIN}_{self.mac}_availability"
+
+    @callback
+    def _on_connection_state_change(self, connected: bool) -> None:
+        """Invoked by OWNd (in the event loop) on real connection transitions.
+
+        OWNd only flips to False after exhausting its own reconnection attempts,
+        so routine ~58min recycles never reach here. We add a grace period on
+        top: only a *sustained* outage marks the entities unavailable, and a
+        recovery within the grace window is completely silent.
+        """
+        if connected:
+            if self._unavailable_timer is not None:
+                self._unavailable_timer()
+                self._unavailable_timer = None
+            if not self._available:
+                self._available = True
+                LOGGER.info("%s Gateway available again.", self.log_id)
+                self._notify_availability()
+        elif self._unavailable_timer is None and self._available:
+            LOGGER.warning(
+                "%s Gateway connection lost; marking unavailable in %ss "
+                "if not recovered.",
+                self.log_id,
+                AVAILABILITY_GRACE,
+            )
+            self._unavailable_timer = async_call_later(
+                self.hass, AVAILABILITY_GRACE, self._mark_unavailable
+            )
+
+    @callback
+    def _mark_unavailable(self, _now) -> None:
+        """Grace period elapsed without recovery: entities go unavailable."""
+        self._unavailable_timer = None
+        if self._available:
+            self._available = False
+            LOGGER.warning(
+                "%s Gateway unavailable (outage exceeded %ss).",
+                self.log_id,
+                AVAILABILITY_GRACE,
+            )
+            self._notify_availability()
+
+    @callback
+    def _notify_availability(self) -> None:
+        """Tell every entity bound to this gateway to re-render availability."""
+        async_dispatcher_send(self.hass, self.availability_signal)
+
+    async def test(self) -> dict:
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
 
     async def listening_loop(self):
@@ -135,9 +195,29 @@ class MyHOMEGatewayHandler:
 
         LOGGER.debug("%s Creating listening worker.", self.log_id)
 
-        _event_session = OWNEventSession(gateway=self.gateway, logger=LOGGER)
-        await _event_session.connect()
+        _event_session = OWNEventSession(
+            gateway=self.gateway,
+            logger=LOGGER,
+            on_state_change=self._on_connection_state_change,
+        )
+        try:
+            await _event_session.connect()
+        except Exception:
+            # Never leave the command workers blocked forever on a readiness
+            # signal that will never arrive: surface the failure (the task ends,
+            # and the entry-level retry logic can take over) instead of dying
+            # silently with the event still unset.
+            self.is_connected = False
+            LOGGER.exception(
+                "%s Event session could not be established.", self.log_id
+            )
+            raise
+
         self.is_connected = True
+        self._event_session_ready.set()  # Event session up: command sessions may start.
+        LOGGER.debug(
+            "%s Event session ready, command sessions can now start.", self.log_id
+        )
 
         while not self._terminate_listener:
             message = await _event_session.get_next()
@@ -148,11 +228,15 @@ class MyHOMEGatewayHandler:
                     _event_content = {"gateway": str(self.gateway.host)}
                     _event_content.update(message.event_content)
                     self.hass.bus.async_fire("myhome_message_event", _event_content)
-                else:
+                elif message is not None:
+                # EOF di routine -> get_next() restituisce None: non è un evento,
+                # non lo immettiamo sul bus (coerente col declassamento a DEBUG del log).
                     self.hass.bus.async_fire("myhome_message_event", {"gateway": str(self.gateway.host), "message": str(message)})
 
             if not isinstance(message, OWNMessage):
-                LOGGER.warning(
+                # Expected on a routine session close/reconnect (EOF -> None),
+                # so log at DEBUG: it is not an anomaly.
+                LOGGER.debug(
                     "%s Data received is not a message: `%s`",
                     self.log_id,
                     message,
@@ -167,12 +251,15 @@ class MyHOMEGatewayHandler:
                             self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity].handle_event(message)
                 else:
                     continue
-            elif (
-                isinstance(message, OWNLightingEvent)
-                or isinstance(message, OWNAutomationEvent)
-                or isinstance(message, OWNDryContactEvent)
-                or isinstance(message, OWNAuxEvent)
-                or isinstance(message, OWNHeatingEvent)
+            elif isinstance(
+                message,
+                (
+                    OWNLightingEvent,
+                    OWNAutomationEvent,
+                    OWNDryContactEvent,
+                    OWNAuxEvent,
+                    OWNHeatingEvent,
+                ),
             ):
                 if not message.is_translation:
                     is_event = False
@@ -344,7 +431,7 @@ class MyHOMEGatewayHandler:
                     self.log_id,
                     message.human_readable_log,
                 )
-            elif isinstance(message, OWNGatewayEvent) or isinstance(message, OWNGatewayCommand):
+            elif isinstance(message, (OWNGatewayEvent, OWNGatewayCommand)):
                 LOGGER.info(
                     "%s %s",
                     self.log_id,
@@ -361,7 +448,6 @@ class MyHOMEGatewayHandler:
         self.is_connected = False
 
         LOGGER.debug("%s Destroying listening worker.", self.log_id)
-        self.listening_worker.cancel()
 
     async def sending_loop(self, worker_id: int):
         self._terminate_sender = False
@@ -372,19 +458,54 @@ class MyHOMEGatewayHandler:
             worker_id,
         )
 
+        # Wait for the event session to be established before opening the command
+        # session: the MH201 cannot negotiate both at the same time. Bounded, so
+        # a never-ready event session cannot hang this worker forever.
+        LOGGER.debug(
+            "%s Worker %s waiting for event session to be ready...",
+            self.log_id,
+            worker_id,
+        )
+        try:
+            await asyncio.wait_for(
+                self._event_session_ready.wait(), timeout=EVENT_READY_TIMEOUT
+            )
+        except TimeoutError:
+            LOGGER.error(
+                "%s Worker %s: event session not ready after %ss; aborting worker.",
+                self.log_id,
+                worker_id,
+                EVENT_READY_TIMEOUT,
+            )
+            return
+        LOGGER.debug(
+            "%s Worker %s: event session is ready, proceeding with command session.",
+            self.log_id,
+            worker_id,
+        )
+
         _command_session = OWNCommandSession(gateway=self.gateway, logger=LOGGER)
-        await _command_session.connect()
+        try:
+            await _command_session.connect()
+        except Exception:
+            LOGGER.exception(
+                "%s Worker %s: command session could not be established.",
+                self.log_id,
+                worker_id,
+            )
+            return
 
         while not self._terminate_sender:
             task = await self.send_buffer.get()
             LOGGER.debug(
                 "%s Message `%s` was successfully unqueued by worker %s.",
-                self.name,
-                self.gateway.host,
+                self.log_id,
                 task["message"],
                 worker_id,
             )
-            await _command_session.send(message=task["message"], is_status_request=task["is_status_request"])
+            await _command_session.send(
+                message=task["message"], is_status_request=task["is_status_request"]
+            )
             self.send_buffer.task_done()
 
         await _command_session.close()
@@ -400,6 +521,9 @@ class MyHOMEGatewayHandler:
         LOGGER.info("%s Closing event listener", self.log_id)
         self._terminate_sender = True
         self._terminate_listener = True
+        if self._unavailable_timer is not None:
+            self._unavailable_timer()
+            self._unavailable_timer = None
 
         return True
 
