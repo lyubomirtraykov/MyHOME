@@ -2,15 +2,15 @@
   "domain": "myhome",
   "name": "MyHOME",
   "codeowners": [
-    "@fedem95"
+    "@lyubomirtraykov"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/fedem95/MyHOME",
+  "documentation": "https://github.com/lyubomirtraykov/MyHOME",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/fedem95/MyHOME/issues",
+  "issue_tracker": "https://github.com/lyubomirtraykov/MyHOME/issues",
   "requirements": [
-    "OWNd @ git+https://github.com/fedem95/OWNd@v1.0.4"
+    "OWNd @ git+https://github.com/lyubomirtraykov/OWNd@v1.0.0"
   ],
   "ssdp": [
     {
