@@ -393,6 +393,7 @@ sensor_schema = MyHomeSensorSchema(
             Required(CONF_DEVICE_CLASS): In(
                 [
                     SensorDeviceClass.TEMPERATURE,
+                    SensorDeviceClass.HUMIDITY,
                     SensorDeviceClass.POWER,
                     SensorDeviceClass.ENERGY,
                     SensorDeviceClass.ILLUMINANCE,
