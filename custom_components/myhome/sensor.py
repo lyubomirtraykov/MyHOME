@@ -20,6 +20,7 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_MAC,
     LIGHT_LUX,
+    PERCENTAGE,
     UnitOfPower,
     UnitOfEnergy,
     UnitOfTemperature,
@@ -34,6 +35,7 @@ from OWNd.message import (
     MESSAGE_TYPE_ILLUMINANCE,
     MESSAGE_TYPE_MAIN_TEMPERATURE,
     MESSAGE_TYPE_SECONDARY_TEMPERATURE,
+    MESSAGE_TYPE_MAIN_HUMIDITY,
     OWNEnergyCommand,
     OWNEnergyEvent,
     OWNHeatingCommand,
@@ -150,6 +152,24 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         ):
             _sensors.append(
                 MyHOMETemperatureSensor(
+                    hass=hass,
+                    device_id=_sensor,
+                    who=_configured_sensors[_sensor][CONF_WHO],
+                    where=_configured_sensors[_sensor][CONF_WHERE],
+                    name=_configured_sensors[_sensor][CONF_NAME],
+                    device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
+                    manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
+                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                )
+            )
+
+        elif (
+            _configured_sensors[_sensor][CONF_DEVICE_CLASS]
+            == SensorDeviceClass.HUMIDITY
+        ):
+            _sensors.append(
+                MyHOMEHumiditySensor(
                     hass=hass,
                     device_id=_sensor,
                     who=_configured_sensors[_sensor][CONF_WHO],
@@ -512,6 +532,89 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
                 message.human_readable_log,
             )
             self._attr_native_value = message.secondary_temperature[1]
+            self.async_schedule_update_ha_state()
+
+
+class MyHOMEHumiditySensor(MyHOMEEntity, SensorEntity):
+    def __init__(
+        self,
+        hass,
+        name: str,
+        device_id: str,
+        who: str,
+        where: str,
+        device_class: str,
+        manufacturer: str,
+        model: str,
+        gateway: MyHOMEGatewayHandler,
+    ) -> None:
+        super().__init__(
+            hass=hass,
+            name=name,
+            platform=PLATFORM,
+            device_id=device_id,
+            who=who,
+            where=where,
+            manufacturer=manufacturer,
+            model=model,
+            gateway=gateway,
+        )
+
+        self._entity_specific_name = "Humidity"
+        self._attr_name = f"{name} {self._entity_specific_name}"
+
+        self._attr_device_class = device_class
+        self._attr_unique_id = (
+            f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
+        )
+        self._attr_native_unit_of_measurement = PERCENTAGE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_should_poll = True
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {
+            "Sensor": f"({self._where[0]}){self._where[1:]}"
+        }
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
+            self._platform
+        ][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
+        await self.async_update()
+
+    async def async_will_remove_from_hass(self):
+        """When entity is removed from hass."""
+        if (
+            self._attr_device_class
+            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
+                self._platform
+            ][self._device_id][CONF_ENTITIES]
+        ):
+            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
+                self._platform
+            ][self._device_id][CONF_ENTITIES][self._attr_device_class]
+
+    async def async_update(self):
+        """Update the entity.
+
+        Only used by the generic entity update service.
+        """
+        await self._gateway_handler.send_status_request(
+            OWNHeatingCommand.get_humidity(self._where)
+        )
+
+    def handle_event(self, message: OWNHeatingEvent):
+        """Handle an event message."""
+        if message.message_type is not MESSAGE_TYPE_MAIN_HUMIDITY:
+            return True
+
+        if message.message_type is MESSAGE_TYPE_MAIN_HUMIDITY:
+            LOGGER.info(
+                "%s %s",
+                self._gateway_handler.log_id,
+                message.human_readable_log,
+            )
+            self._attr_native_value = message.main_humidity
             self.async_schedule_update_ha_state()
 
 
