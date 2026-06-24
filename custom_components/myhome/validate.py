@@ -259,7 +259,7 @@ class MyHomeSensorSchema(Schema):
                     data[device][CONF_ENTITIES][f"total-{SensorDeviceClass.ENERGY}"] = {}
                     if data[device][CONF_DEVICE_CLASS] in [SensorDeviceClass.POWER]:
                         data[device][CONF_ENTITIES][f"{SensorDeviceClass.POWER}"] = {}
-                elif data[device][CONF_DEVICE_CLASS] in [SensorDeviceClass.TEMPERATURE]:
+                elif data[device][CONF_DEVICE_CLASS] in [SensorDeviceClass.TEMPERATURE, SensorDeviceClass.HUMIDITY]:
                     if CONF_WHO not in data[device]:
                         data[device][CONF_WHO] = "4"
                     elif data[device][CONF_WHO] != "4":
