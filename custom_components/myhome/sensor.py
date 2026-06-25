@@ -58,7 +58,7 @@ from .const import (
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
 
-SCAN_INTERVAL = timedelta(seconds=60)
+SCAN_INTERVAL = timedelta(seconds=600)
 
 SERVICE_SEND_INSTANT_POWER = "start_sending_instant_power"
 
