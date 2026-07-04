@@ -157,7 +157,10 @@ class MyHOMESwitch(MyHOMEEntity, SwitchEntity):
                 self._gateway_handler.log_id,
                 message.human_readable_log,
             )
-        self._attr_is_on = message.is_on
+        # is_on is None for frames that carry no on/off state: keep the
+        # last known state instead of overwriting it.
+        if message.is_on is not None:
+            self._attr_is_on = message.is_on
         if self._off_icon is not None and self._on_icon is not None:
             self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
         self.async_schedule_update_ha_state()

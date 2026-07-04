@@ -217,7 +217,10 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             self._gateway_handler.log_id,
             message.human_readable_log,
         )
-        self._attr_is_on = message.is_on
+        # is_on is None for frames that carry no on/off state (e.g. PIR or
+        # illuminance dimensions): don't overwrite the known state with them.
+        if message.is_on is not None:
+            self._attr_is_on = message.is_on
         if ColorMode.BRIGHTNESS in self._attr_supported_color_modes and message.brightness is not None:
             self._attr_brightness_pct = message.brightness
             self._attr_brightness = percent_to_eight_bits(message.brightness)

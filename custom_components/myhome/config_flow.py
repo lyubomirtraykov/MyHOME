@@ -104,10 +104,18 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         except TimeoutError:
             return self.async_abort(reason="discovery_timeout")
 
-        # Find already configured hosts
+        # Drop gateways that are already configured, plus any discovery result
+        # too incomplete to be usable (SCPD fetch failed -> no serialNumber):
+        # indexing those blindly used to crash the flow with a KeyError.
         already_configured = self._async_current_ids(False)
-        if user_input is not None:
-            local_gateways = [gateway for gateway in local_gateways if dr.format_mac(f'{MACAddress(user_input["serialNumber"])}') not in already_configured]
+
+        def _is_selectable(gateway: dict) -> bool:
+            try:
+                return dr.format_mac(f'{MACAddress(gateway["serialNumber"])}') not in already_configured
+            except (KeyError, ValueError):
+                return False
+
+        local_gateways = [gateway for gateway in local_gateways if _is_selectable(gateway)]
 
         # if not local_gateways:
         #     return self.async_abort(reason="all_configured")
@@ -120,7 +128,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                 {
                     Required("serial"): In(
                         {
-                            **{gateway["serialNumber"]: f"{gateway['modelName']} Gateway ({gateway['address']})" for gateway in local_gateways},
+                            **{gateway["serialNumber"]: f"{gateway.get('modelName', 'Unknown')} Gateway ({gateway['address']})" for gateway in local_gateways},
                             "00:00:00:00:00:00": "Custom",
                         }
                     )
