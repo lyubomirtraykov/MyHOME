@@ -1,15 +1,19 @@
 """ MyHOME integration. """
 
-import aiofiles
 import yaml
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from OWNd.message import OWNCommand, OWNGatewayCommand
+from voluptuous import Invalid
 
 from .const import (
     ATTR_GATEWAY,
@@ -34,6 +38,81 @@ async def async_setup(hass, config):
     """Set up the MyHOME component."""
     hass.data[DOMAIN] = {}
 
+    # The services are global, not tied to a single config entry: register
+    # them once here, so loading/unloading one gateway can never remove them
+    # for another. The target gateway is resolved at call time.
+
+    async def handle_sync_time(call):
+        gateway = call.data.get(ATTR_GATEWAY, None)
+        if gateway is None:
+            gateway = next(iter(hass.data[DOMAIN]), None)
+        else:
+            mac = format_mac(gateway)
+            if mac is None:
+                LOGGER.error(
+                    "Invalid gateway mac `%s`, could not send time synchronisation message.",
+                    gateway,
+                )
+                return False
+            gateway = mac
+        timezone = hass.config.time_zone
+        if gateway in hass.data[DOMAIN] and CONF_ENTITY in hass.data[DOMAIN][gateway]:
+            await hass.data[DOMAIN][gateway][CONF_ENTITY].send(
+                OWNGatewayCommand.set_datetime_to_now(timezone)
+            )
+        else:
+            LOGGER.error(
+                "Gateway `%s` not found or not loaded, could not send time synchronisation message.",
+                gateway,
+            )
+            return False
+        return True
+
+    hass.services.async_register(DOMAIN, "sync_time", handle_sync_time)
+
+    async def handle_send_message(call):
+        gateway = call.data.get(ATTR_GATEWAY, None)
+        message = call.data.get(ATTR_MESSAGE, None)
+        if gateway is None:
+            gateway = next(iter(hass.data[DOMAIN]), None)
+        else:
+            mac = format_mac(gateway)
+            if mac is None:
+                LOGGER.error(
+                    "Invalid gateway mac `%s`, could not send message `%s`.",
+                    gateway,
+                    message,
+                )
+                return False
+            gateway = mac
+        LOGGER.debug("Handling message `%s` to be sent to `%s`", message, gateway)
+        if gateway in hass.data[DOMAIN] and CONF_ENTITY in hass.data[DOMAIN][gateway]:
+            if message is not None:
+                own_message = OWNCommand.parse(message)
+                if own_message is not None:
+                    if own_message.is_valid:
+                        LOGGER.debug(
+                            "%s Sending valid OpenWebNet Message: `%s`",
+                            hass.data[DOMAIN][gateway][CONF_ENTITY].log_id,
+                            own_message,
+                        )
+                        await hass.data[DOMAIN][gateway][CONF_ENTITY].send(own_message)
+                else:
+                    LOGGER.error(
+                        "Could not parse message `%s`, not sending it.", message
+                    )
+                    return False
+        else:
+            LOGGER.error(
+                "Gateway `%s` not found or not loaded, could not send message `%s`.",
+                gateway,
+                message,
+            )
+            return False
+        return True
+
+    hass.services.async_register(DOMAIN, "send_message", handle_send_message)
+
     if DOMAIN not in config:
         return True
 
@@ -53,20 +132,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
     _generate_events = entry.options.get(CONF_GENERATE_EVENTS, False)
 
+    def _load_config_file():
+        # File I/O and YAML parsing are blocking: keep them off the event loop.
+        with open(_config_file_path, encoding="utf-8") as yaml_file:
+            return yaml.safe_load(yaml_file)
+
     try:
-        async with aiofiles.open(_config_file_path) as yaml_file:
-            _validated_config = config_schema(yaml.safe_load(await yaml_file.read()))
-    except FileNotFoundError:
-        LOGGER.error("Configuration file '%s' is not present!", _config_file_path)
-        return False
+        _raw_config = await hass.async_add_executor_job(_load_config_file)
+    except FileNotFoundError as err:
+        raise ConfigEntryError(
+            f"Configuration file '{_config_file_path}' is not present!"
+        ) from err
+    except yaml.YAMLError as err:
+        raise ConfigEntryError(
+            f"Configuration file '{_config_file_path}' is not valid YAML: {err}"
+        ) from err
+
+    try:
+        _validated_config = config_schema(_raw_config)
+    except Invalid as err:
+        raise ConfigEntryError(
+            f"Configuration file '{_config_file_path}' is invalid: {err}"
+        ) from err
 
     if entry.data[CONF_MAC] in _validated_config:
         hass.data[DOMAIN][entry.data[CONF_MAC]] = _validated_config[
             entry.data[CONF_MAC]
         ]
     else:
-        LOGGER.error("Gateway with MAC %s is not configured in %s", entry.data[CONF_MAC], _config_file_path)
-        return False
+        raise ConfigEntryError(
+            f"Gateway with MAC {entry.data[CONF_MAC]} is not configured "
+            f"in {_config_file_path}"
+        )
 
     # Migrating the config entry's unique_id if it was not formated to the recommended hass standard
     if entry.unique_id != dr.format_mac(entry.unique_id):
@@ -97,19 +194,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         ) from err
 
     # A password problem is permanent and must be handled with a reauth flow,
-    # never retried in a loop.
+    # never retried in a loop. Raising ConfigEntryAuthFailed lets HA start
+    # (and deduplicate) the reauth flow and flag the entry properly, instead
+    # of spawning the flow by hand and failing the setup with a generic error.
     if tests_results is not None and not tests_results["Success"] and tests_results[
         "Message"
     ] in ("password_error", "password_required"):
-        hass.async_create_task(
-            hass.config_entries.flow.async_init(
-                DOMAIN,
-                context={"source": SOURCE_REAUTH},
-                data=entry.data,
-            )
-        )
         hass.data[DOMAIN][entry.data[CONF_MAC]].pop(CONF_ENTITY, None)
-        return False
+        raise ConfigEntryAuthFailed(
+            f"Gateway authentication failed: {tests_results['Message']}"
+        )
 
     # Any other negotiation failure (including test() returning None, which the
     # library may do on a refused/EOF connection) is treated as transient ->
@@ -215,78 +309,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         ):
             device_registry.async_remove_device(device_id)
 
-    # Defining the services
-
-    async def handle_sync_time(call):
-        gateway = call.data.get(ATTR_GATEWAY, None)
-        if gateway is None:
-            gateway = list(hass.data[DOMAIN].keys())[0]
-        else:
-            mac = format_mac(gateway)
-            if mac is None:
-                LOGGER.error(
-                    "Invalid gateway mac `%s`, could not send time synchronisation message.",
-                    gateway,
-                )
-                return False
-            gateway = mac
-        timezone = hass.config.as_dict()["time_zone"]
-        if gateway in hass.data[DOMAIN]:
-            await hass.data[DOMAIN][gateway][CONF_ENTITY].send(
-                OWNGatewayCommand.set_datetime_to_now(timezone)
-            )
-        else:
-            LOGGER.error(
-                "Gateway `%s` not found, could not send time synchronisation message.",
-                gateway,
-            )
-            return False
-        return True
-
-    hass.services.async_register(DOMAIN, "sync_time", handle_sync_time)
-
-    async def handle_send_message(call):
-        gateway = call.data.get(ATTR_GATEWAY, None)
-        message = call.data.get(ATTR_MESSAGE, None)
-        if gateway is None:
-            gateway = list(hass.data[DOMAIN].keys())[0]
-        else:
-            mac = format_mac(gateway)
-            if mac is None:
-                LOGGER.error(
-                    "Invalid gateway mac `%s`, could not send message `%s`.",
-                    gateway,
-                    message,
-                )
-                return False
-            gateway = mac
-        LOGGER.debug("Handling message `%s` to be sent to `%s`", message, gateway)
-        if gateway in hass.data[DOMAIN]:
-            if message is not None:
-                own_message = OWNCommand.parse(message)
-                if own_message is not None:
-                    if own_message.is_valid:
-                        LOGGER.debug(
-                            "%s Sending valid OpenWebNet Message: `%s`",
-                            hass.data[DOMAIN][gateway][CONF_ENTITY].log_id,
-                            own_message,
-                        )
-                        await hass.data[DOMAIN][gateway][CONF_ENTITY].send(own_message)
-                else:
-                    LOGGER.error(
-                        "Could not parse message `%s`, not sending it.", message
-                    )
-                    return False
-        else:
-            LOGGER.error(
-                "Gateway `%s` not found, could not send message `%s`.", gateway, message
-            )
-            return False
-        return True
-
-    hass.services.async_register(DOMAIN, "send_message", handle_send_message)
+    # Reload the entry whenever its data or options change from the UI, so
+    # worker_count / file_path / generate_events take effect immediately.
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the config entry when its data or options are updated."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass, entry):
@@ -299,8 +331,8 @@ async def async_unload_entry(hass, entry):
     )
     unload_ok = await hass.config_entries.async_unload_platforms(entry, platforms)
 
-    hass.services.async_remove(DOMAIN, "sync_time")
-    hass.services.async_remove(DOMAIN, "send_message")
+    # The services are registered once in async_setup and shared by all
+    # gateways: they must NOT be removed when a single entry unloads.
 
     gateway_handler = hass.data[DOMAIN][entry.data[CONF_MAC]].pop(CONF_ENTITY)
     del hass.data[DOMAIN][entry.data[CONF_MAC]]

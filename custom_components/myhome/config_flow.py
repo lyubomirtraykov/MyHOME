@@ -419,13 +419,12 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
 
             if not errors:
                 if _data_update:
+                    # No explicit reload here: the update listener registered
+                    # in async_setup_entry reloads the entry on any change
+                    # (data or options).
                     self.hass.config_entries.async_update_entry(
                         self.config_entry, data=self.data
                     )
-                    await self.hass.config_entries.async_reload(
-                        self.config_entry.entry_id
-                    )
-
                 return self.async_create_entry(title="", data=self.options)
 
         return self.async_show_form(
