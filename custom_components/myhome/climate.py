@@ -19,6 +19,9 @@ from homeassistant.const import (
     CONF_MAC,
     UnitOfTemperature,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from OWNd.message import (
     OWNHeatingEvent,
@@ -56,16 +59,20 @@ from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _climate_devices = []
     _configured_climate_devices = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
         CONF_PLATFORMS
     ][PLATFORM]
 
-    for _climate_device in _configured_climate_devices.keys():
+    for _climate_device in _configured_climate_devices:
         _climate_devices.append(
             MyHOMEClimate(
                 hass=hass,
@@ -95,15 +102,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_climate_devices)
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_climate_devices = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
         CONF_PLATFORMS
     ][PLATFORM]
 
-    for _climate_device in _configured_climate_devices.keys():
+    for _climate_device in _configured_climate_devices:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
             _climate_device
         ]
@@ -190,8 +197,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
     def target_temperature(self) -> float:
         if self._local_target_temperature is not None:
             return self._local_target_temperature
-        else:
-            return self._target_temperature
+        return self._target_temperature
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
@@ -221,16 +227,15 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                         standalone=self._standalone,
                     )
                 )
-        elif hvac_mode == HVACMode.COOL:
-            if self._target_temperature is not None:
-                await self._gateway_handler.send(
-                    OWNHeatingCommand.set_temperature(
-                        where=self._where,
-                        temperature=self._target_temperature,
-                        mode=CLIMATE_MODE_COOL,
-                        standalone=self._standalone,
-                    )
+        elif hvac_mode == HVACMode.COOL and self._target_temperature is not None:
+            await self._gateway_handler.send(
+                OWNHeatingCommand.set_temperature(
+                    where=self._where,
+                    temperature=self._target_temperature,
+                    mode=CLIMATE_MODE_COOL,
+                    standalone=self._standalone,
                 )
+            )
 
     # async def async_set_fan_mode(self, fan_mode):
     #     """Set new target fan mode."""

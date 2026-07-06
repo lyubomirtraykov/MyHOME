@@ -8,6 +8,9 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_MAC,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from OWNd.message import (
     OWNLightingEvent,
@@ -33,14 +36,18 @@ from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _switches = []
     _configured_switches = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _switch in _configured_switches.keys():
+    for _switch in _configured_switches:
         _switch = MyHOMESwitch(
             hass=hass,
             device_id=_switch,
@@ -48,7 +55,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             where=_configured_switches[_switch][CONF_WHERE],
             icon=_configured_switches[_switch][CONF_ICON],
             icon_on=_configured_switches[_switch][CONF_ICON_ON],
-            interface=_configured_switches[_switch][CONF_BUS_INTERFACE] if CONF_BUS_INTERFACE in _configured_switches[_switch] else None,
+            interface=_configured_switches[_switch].get(CONF_BUS_INTERFACE, None),
             name=_configured_switches[_switch][CONF_NAME],
             entity_name=_configured_switches[_switch][CONF_ENTITY_NAME],
             device_class=_configured_switches[_switch][CONF_DEVICE_CLASS],
@@ -61,13 +68,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_switches)
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_switches = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _switch in _configured_switches.keys():
+    for _switch in _configured_switches:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_switch]
 
 

@@ -15,6 +15,9 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_MAC,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from OWNd.message import (
     OWNLightingEvent,
@@ -40,14 +43,18 @@ from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _lights = []
     _configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _light in _configured_lights.keys():
+    for _light in _configured_lights:
         _light = MyHOMELight(
             hass=hass,
             device_id=_light,
@@ -55,7 +62,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             where=_configured_lights[_light][CONF_WHERE],
             icon=_configured_lights[_light][CONF_ICON],
             icon_on=_configured_lights[_light][CONF_ICON_ON],
-            interface=_configured_lights[_light][CONF_BUS_INTERFACE] if CONF_BUS_INTERFACE in _configured_lights[_light] else None,
+            interface=_configured_lights[_light].get(CONF_BUS_INTERFACE, None),
             name=_configured_lights[_light][CONF_NAME],
             entity_name=_configured_lights[_light][CONF_ENTITY_NAME],
             dimmable=_configured_lights[_light][CONF_DIMMABLE],
@@ -68,13 +75,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_lights)
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _light in _configured_lights.keys():
+    for _light in _configured_lights:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_light]
 
 
@@ -165,7 +172,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:
             if kwargs[ATTR_FLASH] == FLASH_SHORT:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 0.5))
-            elif kwargs[ATTR_FLASH] == FLASH_LONG:
+            if kwargs[ATTR_FLASH] == FLASH_LONG:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 1.5))
 
         if ((ATTR_BRIGHTNESS in kwargs or ATTR_BRIGHTNESS_PCT in kwargs) and ColorMode.BRIGHTNESS in self._attr_supported_color_modes) or (
@@ -173,28 +180,26 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         ):
             if ATTR_BRIGHTNESS in kwargs or ATTR_BRIGHTNESS_PCT in kwargs:
                 _percent_brightness = eight_bits_to_percent(kwargs[ATTR_BRIGHTNESS]) if ATTR_BRIGHTNESS in kwargs else None
-                _percent_brightness = kwargs[ATTR_BRIGHTNESS_PCT] if ATTR_BRIGHTNESS_PCT in kwargs else _percent_brightness
+                _percent_brightness = kwargs.get(ATTR_BRIGHTNESS_PCT, _percent_brightness)
 
                 if _percent_brightness == 0:
                     return await self.async_turn_off(**kwargs)
-                else:
-                    return (
-                        await self._gateway_handler.send(
-                            OWNLightingCommand.set_brightness(
-                                self._full_where,
-                                _percent_brightness,
-                                int(kwargs[ATTR_TRANSITION]),
-                            )
+                return (
+                    await self._gateway_handler.send(
+                        OWNLightingCommand.set_brightness(
+                            self._full_where,
+                            _percent_brightness,
+                            int(kwargs[ATTR_TRANSITION]),
                         )
-                        if ATTR_TRANSITION in kwargs
-                        else await self._gateway_handler.send(OWNLightingCommand.set_brightness(self._full_where, _percent_brightness))
                     )
-            else:
-                return await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where, int(kwargs[ATTR_TRANSITION])))
-        else:
-            await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where))
-            if ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
-                await self.async_update()
+                    if ATTR_TRANSITION in kwargs
+                    else await self._gateway_handler.send(OWNLightingCommand.set_brightness(self._full_where, _percent_brightness))
+                )
+            return await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where, int(kwargs[ATTR_TRANSITION])))
+        await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where))
+        if ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
+            await self.async_update()
+        return None
 
     async def async_turn_off(self, **kwargs):
         """Turn the device off."""
@@ -205,7 +210,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:
             if kwargs[ATTR_FLASH] == FLASH_SHORT:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 0.5))
-            elif kwargs[ATTR_FLASH] == FLASH_LONG:
+            if kwargs[ATTR_FLASH] == FLASH_LONG:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 1.5))
 
         return await self._gateway_handler.send(OWNLightingCommand.switch_off(self._full_where))

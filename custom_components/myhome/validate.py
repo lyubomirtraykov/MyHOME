@@ -63,7 +63,7 @@ def format_mac(address: str) -> str:
     return ha_format_mac(mac)
 
 
-class MacAddress(object):
+class MacAddress:
     def __init__(self, msg=None):
         self.msg = msg
 
@@ -74,94 +74,87 @@ class MacAddress(object):
         return format_mac(v)
 
     def __repr__(self):
-        return "MacAddress(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class General(object):
+class General:
     def __init__(self, msg=None):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v == "0":
+        if isinstance(v, str) and v == "0":
             return v
-        else:
-            raise Invalid(f"Invalid General WHERE {v}, it must be 0.")
+        raise Invalid(f"Invalid General WHERE {v}, it must be 0.")
 
     def __repr__(self):
-        return "Where(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class Area(object):
+class Area:
     def __init__(self, msg=None):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v in ["00", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
+        if isinstance(v, str) and v in ["00", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
             return v
-        else:
-            raise Invalid(f"Invalid Area WHERE {v}, it must be a string in [00, 1-9, 10].")
+        raise Invalid(f"Invalid Area WHERE {v}, it must be a string in [00, 1-9, 10].")
 
     def __repr__(self):
-        return "Where(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class Group(object):
+class Group:
     def __init__(self, msg=None):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.startswith("#") and v[1:].isdigit() and int(v[1:]) >= 1 and int(v[1:]) <= 255:
+        if isinstance(v, str) and v.startswith("#") and v[1:].isdigit() and int(v[1:]) >= 1 and int(v[1:]) <= 255:
             return f"#{int(v[1:])}"
-        else:
-            raise Invalid(f"Invalid Group WHERE {v}, it must be a string like '#[1-255]'.")
+        raise Invalid(f"Invalid Group WHERE {v}, it must be a string like '#[1-255]'.")
 
     def __repr__(self):
-        return "Where(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class PointToPoint(object):
+class PointToPoint:
     def __init__(self, msg=None):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.isdigit():
+        if isinstance(v, str) and v.isdigit():
             _length = len(v)
             if _length == 2 or _length == 4:
                 _a = v[0 : _length // 2]
                 _pl = v[_length // 2 :]
                 if int(_a) >= 0 and int(_a) <= 10 and int(_pl) >= 0 and int(_pl) <= 15:
                     return f"{_a}{_pl}"
-                else:
-                    raise Invalid(f"Invalid WHERE {v}, A must be [0-10] and PL must be [0-15].")
-            else:
-                raise Invalid(f"Invalid WHERE {v} length, it must be a string of 2 or 4 digits.")
-        else:
-            raise Invalid(f"Invalid WHERE {v}, it must be a string of 2 or 4 digits.")
+                raise Invalid(f"Invalid WHERE {v}, A must be [0-10] and PL must be [0-15].")
+            raise Invalid(f"Invalid WHERE {v} length, it must be a string of 2 or 4 digits.")
+        raise Invalid(f"Invalid WHERE {v}, it must be a string of 2 or 4 digits.")
 
     def __repr__(self):
-        return "Where(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class SpecialWhere(object):
+class SpecialWhere:
     def __init__(self, msg=None):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.isdigit():
+        if isinstance(v, str) and v.isdigit():
             return v
-        else:
-            raise Invalid(f"Invalid WHERE {v}, it must be a string of digits.")
+        raise Invalid(f"Invalid WHERE {v}, it must be a string of digits.")
 
     def __repr__(self):
-        return "Where(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class BusInterface(object):
+class BusInterface:
     def __init__(self, msg=None):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.isdigit() and len(v) == 2:
+        if isinstance(v, str) and v.isdigit() and len(v) == 2:
             if int(v) > 15:
                 raise Invalid(f"Invalid Bus Interface number {v}, it must be between 00 and 15.")
         elif v is not None:
@@ -169,7 +162,7 @@ class BusInterface(object):
         return v
 
     def __repr__(self):
-        return "BusInterface(%s, msg=%r)" % ("String", self.msg)
+        return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
 class MyHomeConfigSchema(Schema):

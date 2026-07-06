@@ -1,0 +1,9 @@
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+# Default E/F plus the bug-hunting families:
+# B  = bugbear (real-bug patterns)     ASYNC = blocking I/O in async code
+# SIM = simplifications                UP    = outdated syntax
+# RET = inconsistent returns           PLE/PLW = pylint errors/warnings
+select = ["E4", "E7", "E9", "F", "B", "ASYNC", "SIM", "UP", "RET", "PLE", "PLW"]

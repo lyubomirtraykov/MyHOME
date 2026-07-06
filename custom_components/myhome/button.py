@@ -17,6 +17,9 @@ from homeassistant.const import (
     CONF_ENTITIES,
     EntityCategory,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     CONF_PLATFORMS,
@@ -31,16 +34,20 @@ from .const import (
 from .myhome_device import MyHOMEEntity
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _buttons = []
     _configured_buttons = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
         CONF_PLATFORMS
     ][PLATFORM]
 
-    for _button in _configured_buttons.keys():
+    for _button in _configured_buttons:
         _disable_button = DisableCommandButtonEntity(
             hass=hass,
             platform=PLATFORM,
@@ -48,9 +55,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             who=_configured_buttons[_button][CONF_WHO],
             where=_configured_buttons[_button][CONF_WHERE],
             interface=(
-                _configured_buttons[_button][CONF_BUS_INTERFACE]
-                if CONF_BUS_INTERFACE in _configured_buttons[_button]
-                else None
+                _configured_buttons[_button].get(CONF_BUS_INTERFACE, None)
             ),
             name=_configured_buttons[_button][CONF_NAME],
             manufacturer=_configured_buttons[_button][CONF_MANUFACTURER],
@@ -66,9 +71,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             who=_configured_buttons[_button][CONF_WHO],
             where=_configured_buttons[_button][CONF_WHERE],
             interface=(
-                _configured_buttons[_button][CONF_BUS_INTERFACE]
-                if CONF_BUS_INTERFACE in _configured_buttons[_button]
-                else None
+                _configured_buttons[_button].get(CONF_BUS_INTERFACE, None)
             ),
             name=_configured_buttons[_button][CONF_NAME],
             manufacturer=_configured_buttons[_button][CONF_MANUFACTURER],
@@ -80,15 +83,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_buttons)
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_buttons = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
         CONF_PLATFORMS
     ][PLATFORM]
 
-    for _button in _configured_buttons.keys():
+    for _button in _configured_buttons:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
             _button
         ]

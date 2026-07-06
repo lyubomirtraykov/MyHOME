@@ -1,5 +1,5 @@
 """Support for MyHome binary sensors (dry contacts and motion sensors)."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from homeassistant.components.binary_sensor import (
     DOMAIN as PLATFORM,
     BinarySensorDeviceClass,
@@ -11,6 +11,9 @@ from homeassistant.const import (
     CONF_ENTITIES,
     STATE_ON,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from OWNd.message import (
@@ -43,14 +46,18 @@ SCAN_INTERVAL = timedelta(seconds=5)
 PIR_SENSITIVITY = ["low", "medium", "high", "very high"]
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _binary_sensors = []
     _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _binary_sensor in _configured_binary_sensors.keys():
+    for _binary_sensor in _configured_binary_sensors:
         _who = int(_configured_binary_sensors[_binary_sensor][CONF_WHO])
         _device_class = _configured_binary_sensors[_binary_sensor][CONF_DEVICE_CLASS]
         if _who == 25:
@@ -102,13 +109,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_binary_sensors)
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _binary_sensor in _configured_binary_sensors.keys():
+    for _binary_sensor in _configured_binary_sensors:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_binary_sensor]
 
 
@@ -304,9 +311,9 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
 
         Only used by the generic entity update service.
         """
-        if self._attr_is_on and self._last_updated and self._last_updated + self._timeout < datetime.now(timezone.utc):
+        if self._attr_is_on and self._last_updated and self._last_updated + self._timeout < datetime.now(UTC):
             self._attr_is_on = False
-            self._last_updated = datetime.now(timezone.utc)
+            self._last_updated = datetime.now(UTC)
             self.async_schedule_update_ha_state()
 
     def handle_event(self, message: OWNLightingEvent):
@@ -316,7 +323,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
             MESSAGE_TYPE_MOTION_TIMEOUT,
             MESSAGE_TYPE_PIR_SENSITIVITY,
         ]:
-            return True
+            return
 
         LOGGER.info(
             "%s %s",
@@ -335,7 +342,8 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
                 if 0 <= message.pir_sensitivity < len(PIR_SENSITIVITY)
                 else f"unknown ({message.pir_sensitivity})"
             )
-        self._last_updated = datetime.now(timezone.utc)
+        self._last_updated = datetime.now(UTC)
         self._attr_force_update = True
         self.async_write_ha_state()
         self._attr_force_update = False
+        return

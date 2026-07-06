@@ -28,6 +28,7 @@ from OWNd.message import (
     OWNCommand,
     OWNDryContactEvent,
     OWNEnergyEvent,
+    OWNEvent,
     OWNGatewayCommand,
     OWNGatewayEvent,
     OWNHeatingCommand,
@@ -443,6 +444,19 @@ class MyHOMEGatewayHandler:
                             "%s %s",
                             self.log_id,
                             message.human_readable_log,
+                        )
+                    elif (
+                        isinstance(message, OWNEvent)
+                        and message.who is not None
+                        and message.who > 1000
+                    ):
+                        # Diagnostic/translation chatter (WHO > 1000, e.g.
+                        # actuator status bitmasks): routine bus noise, not
+                        # worth an INFO "unsupported" entry.
+                        LOGGER.debug(
+                            "%s Diagnostic message: `%s`",
+                            self.log_id,
+                            message,
                         )
                     else:
                         LOGGER.info(

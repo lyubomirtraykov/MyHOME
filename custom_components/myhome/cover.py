@@ -11,6 +11,9 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_MAC,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from OWNd.message import (
     OWNAutomationEvent,
@@ -34,20 +37,24 @@ from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _covers = []
     _configured_covers = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _cover in _configured_covers.keys():
+    for _cover in _configured_covers:
         _cover = MyHOMECover(
             hass=hass,
             device_id=_cover,
             who=_configured_covers[_cover][CONF_WHO],
             where=_configured_covers[_cover][CONF_WHERE],
-            interface=_configured_covers[_cover][CONF_BUS_INTERFACE] if CONF_BUS_INTERFACE in _configured_covers[_cover] else None,
+            interface=_configured_covers[_cover].get(CONF_BUS_INTERFACE, None),
             name=_configured_covers[_cover][CONF_NAME],
             entity_name=_configured_covers[_cover][CONF_ENTITY_NAME],
             advanced=_configured_covers[_cover][CONF_ADVANCED_SHUTTER],
@@ -60,13 +67,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_covers)
 
 
-async def async_unload_entry(hass, config_entry):  # pylint: disable=unused-argument
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_covers = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _cover in _configured_covers.keys():
+    for _cover in _configured_covers:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_cover]
 
 

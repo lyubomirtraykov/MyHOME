@@ -24,6 +24,9 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfTemperature,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from OWNd.message import (
@@ -66,9 +69,13 @@ ATTR_MONTH = "month"
 ATTR_DAY = "day"
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _sensors = []
     _configured_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
@@ -76,7 +83,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     ][PLATFORM]
     _power_devices_configured = False
 
-    for _sensor in _configured_sensors.keys():
+    for _sensor in _configured_sensors:
         if (
             _configured_sensors[_sensor][CONF_DEVICE_CLASS] == SensorDeviceClass.POWER
             or _configured_sensors[_sensor][CONF_DEVICE_CLASS]
@@ -192,15 +199,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(_sensors)
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        return
 
     _configured_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
         CONF_PLATFORMS
     ][PLATFORM]
 
-    for _sensor in _configured_sensors.keys():
+    for _sensor in _configured_sensors:
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
             _sensor
         ]
@@ -275,7 +282,7 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
     def handle_event(self, message: OWNEnergyEvent):
         """Handle an event message."""
         if message.message_type not in [MESSAGE_TYPE_ACTIVE_POWER]:
-            return True
+            return
 
         LOGGER.info(
             "%s %s",
@@ -284,6 +291,7 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
         )
         self._attr_native_value = message.active_power
         self.async_schedule_update_ha_state()
+        return
 
     async def start_sending_instant_power(self, duration):
         """Request automatic instant power."""
@@ -386,7 +394,7 @@ class MyHOMEEnergySensor(MyHOMEEntity, SensorEntity):
             MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
             MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
         ]:
-            return True
+            return
 
         if (
             self._entity_specific_id == "total-energy"
@@ -419,6 +427,7 @@ class MyHOMEEnergySensor(MyHOMEEntity, SensorEntity):
             )
             self._attr_native_value = message.current_day_partial_consumption
         self.async_schedule_update_ha_state()
+        return
 
 
 class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
@@ -495,7 +504,7 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
             MESSAGE_TYPE_MAIN_TEMPERATURE,
             MESSAGE_TYPE_SECONDARY_TEMPERATURE,
         ]:
-            return True
+            return
 
         if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:
             LOGGER.info(
@@ -513,6 +522,7 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
             )
             self._attr_native_value = message.secondary_temperature[1]
             self.async_schedule_update_ha_state()
+        return
 
 
 class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
@@ -586,7 +596,7 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
     def handle_event(self, message: OWNLightingEvent):
         """Handle an event message."""
         if message.message_type not in [MESSAGE_TYPE_ILLUMINANCE]:
-            return True
+            return
 
         LOGGER.info(
             "%s %s",
@@ -595,3 +605,4 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
         )
         self._attr_native_value = message.illuminance
         self.async_schedule_update_ha_state()
+        return
