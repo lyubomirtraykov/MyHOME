@@ -20,6 +20,11 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 from OWNd.connection import OWNGateway, OWNSession
 from OWNd.discovery import find_gateways
 from voluptuous import (
@@ -323,7 +328,8 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         if self.gateway_handler.password is not None:
             _suggested_password = self.gateway_handler.password
         else:
-            _suggested_password = 12345
+            # Factory default OPEN password on BTicino gateways.
+            _suggested_password = "12345"
 
         return self.async_show_form(
             step_id="password",
@@ -332,7 +338,9 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                     Required(
                         CONF_OWN_PASSWORD,
                         description={"suggested_value": _suggested_password},
-                    ): Coerce(str),
+                    ): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
                 }
             ),
             description_placeholders={
@@ -438,7 +446,9 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                     Required(
                         CONF_OWN_PASSWORD,
                         description={"suggested_value": self.data[CONF_PASSWORD]},
-                    ): str,
+                    ): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
                     Required(
                         CONF_FILE_PATH,
                         description={"suggested_value": self.options[CONF_FILE_PATH]},

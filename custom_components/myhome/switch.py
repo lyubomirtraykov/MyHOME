@@ -127,7 +127,9 @@ class MyHOMESwitch(MyHOMEEntity, SwitchEntity):
 
         Only used by the generic entity update service.
         """
-        await self._gateway_handler.send_status_request(OWNLightingCommand.status(self._where))
+        # _full_where includes the local bus interface (e.g. 12#4#01): the
+        # status request must target the same object the commands do.
+        await self._gateway_handler.send_status_request(OWNLightingCommand.status(self._full_where))
 
     async def async_turn_on(self, **kwargs):  # pylint: disable=unused-argument
         """Turn the device on."""

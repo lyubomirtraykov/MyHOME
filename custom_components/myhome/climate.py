@@ -238,10 +238,18 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
-        target_temperature = (
-            kwargs.get("temperature", self._local_target_temperature)
-            - self._local_offset
+        _requested_temperature = kwargs.get(
+            "temperature", self._local_target_temperature
         )
+        if _requested_temperature is None:
+            # No temperature in the call and none known yet from the bus:
+            # nothing sensible to send.
+            LOGGER.warning(
+                "%s No target temperature provided and none known yet; ignoring set_temperature call.",
+                self._gateway_handler.log_id,
+            )
+            return
+        target_temperature = _requested_temperature - self._local_offset
         if self._attr_hvac_mode == HVACMode.HEAT:
             await self._gateway_handler.send(
                 OWNHeatingCommand.set_temperature(

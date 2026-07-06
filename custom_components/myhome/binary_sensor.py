@@ -329,7 +329,12 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
             self._timeout = message.motion_timeout + timedelta(seconds=15)
             self._attr_extra_state_attributes["Timeout"] = self._timeout.total_seconds()
         elif message.message_type == MESSAGE_TYPE_PIR_SENSITIVITY:
-            self._attr_extra_state_attributes["Sensitivity"] = PIR_SENSITIVITY[message.pir_sensitivity]
+            # Out-of-range values (undocumented firmware levels) must not raise.
+            self._attr_extra_state_attributes["Sensitivity"] = (
+                PIR_SENSITIVITY[message.pir_sensitivity]
+                if 0 <= message.pir_sensitivity < len(PIR_SENSITIVITY)
+                else f"unknown ({message.pir_sensitivity})"
+            )
         self._last_updated = datetime.now(timezone.utc)
         self._attr_force_update = True
         self.async_write_ha_state()
