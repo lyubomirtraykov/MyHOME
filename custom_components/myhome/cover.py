@@ -9,9 +9,7 @@ from homeassistant.components.cover import (
 
 from homeassistant.const import (
     CONF_NAME,
-    CONF_MAC,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -21,8 +19,6 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_WHO,
     CONF_WHERE,
@@ -30,26 +26,26 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_DEVICE_MODEL,
     CONF_ADVANCED_SHUTTER,
-    DOMAIN,
     LOGGER,
 )
+from .models import MyHomeConfigEntry
 from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MyHomeConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    if PLATFORM not in config_entry.runtime_data.platforms_config:
         return
 
-    _covers = []
-    _configured_covers = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+    _covers: list[MyHOMECover] = []
+    _configured_covers = config_entry.runtime_data.platforms_config[PLATFORM]
 
     for _cover in _configured_covers:
-        _cover = MyHOMECover(
+        _entity = MyHOMECover(
             hass=hass,
             device_id=_cover,
             who=_configured_covers[_cover][CONF_WHO],
@@ -60,21 +56,11 @@ async def async_setup_entry(
             advanced=_configured_covers[_cover][CONF_ADVANCED_SHUTTER],
             manufacturer=_configured_covers[_cover][CONF_MANUFACTURER],
             model=_configured_covers[_cover][CONF_DEVICE_MODEL],
-            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+            gateway=config_entry.runtime_data.gateway_handler,
         )
-        _covers.append(_cover)
+        _covers.append(_entity)
 
     async_add_entities(_covers)
-
-
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return
-
-    _configured_covers = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
-
-    for _cover in _configured_covers:
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_cover]
 
 
 class MyHOMECover(MyHOMEEntity, CoverEntity):

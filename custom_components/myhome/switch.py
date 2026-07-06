@@ -6,9 +6,7 @@ from homeassistant.components.switch import (
 )
 from homeassistant.const import (
     CONF_NAME,
-    CONF_MAC,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -18,8 +16,6 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_ICON,
     CONF_ICON_ON,
@@ -29,26 +25,26 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_DEVICE_MODEL,
     CONF_DEVICE_CLASS,
-    DOMAIN,
     LOGGER,
 )
+from .models import MyHomeConfigEntry
 from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MyHomeConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    if PLATFORM not in config_entry.runtime_data.platforms_config:
         return
 
-    _switches = []
-    _configured_switches = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+    _switches: list[MyHOMESwitch] = []
+    _configured_switches = config_entry.runtime_data.platforms_config[PLATFORM]
 
     for _switch in _configured_switches:
-        _switch = MyHOMESwitch(
+        _entity = MyHOMESwitch(
             hass=hass,
             device_id=_switch,
             who=_configured_switches[_switch][CONF_WHO],
@@ -61,21 +57,11 @@ async def async_setup_entry(
             device_class=_configured_switches[_switch][CONF_DEVICE_CLASS],
             manufacturer=_configured_switches[_switch][CONF_MANUFACTURER],
             model=_configured_switches[_switch][CONF_DEVICE_MODEL],
-            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+            gateway=config_entry.runtime_data.gateway_handler,
         )
-        _switches.append(_switch)
+        _switches.append(_entity)
 
     async_add_entities(_switches)
-
-
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return
-
-    _configured_switches = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
-
-    for _switch in _configured_switches:
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_switch]
 
 
 class MyHOMESwitch(MyHOMEEntity, SwitchEntity):

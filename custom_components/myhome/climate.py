@@ -16,10 +16,8 @@ from homeassistant.components.climate.const import (
 )
 from homeassistant.const import (
     CONF_NAME,
-    CONF_MAC,
     UnitOfTemperature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -41,8 +39,6 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
     CONF_WHO,
     CONF_ZONE,
     CONF_MANUFACTURER,
@@ -52,25 +48,23 @@ from .const import (
     CONF_FAN_SUPPORT,
     CONF_STANDALONE,
     CONF_CENTRAL,
-    DOMAIN,
     LOGGER,
 )
+from .models import MyHomeConfigEntry
 from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MyHomeConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    if PLATFORM not in config_entry.runtime_data.platforms_config:
         return
 
     _climate_devices = []
-    _configured_climate_devices = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
+    _configured_climate_devices = config_entry.runtime_data.platforms_config[PLATFORM]
 
     for _climate_device in _configured_climate_devices:
         _climate_devices.append(
@@ -95,25 +89,11 @@ async def async_setup_entry(
                     CONF_MANUFACTURER
                 ],
                 model=_configured_climate_devices[_climate_device][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                gateway=config_entry.runtime_data.gateway_handler,
             )
         )
 
     async_add_entities(_climate_devices)
-
-
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return
-
-    _configured_climate_devices = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
-
-    for _climate_device in _configured_climate_devices:
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
-            _climate_device
-        ]
 
 
 class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
@@ -154,7 +134,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
         self._attr_min_temp = 5
         self._attr_max_temp = 40
 
-        self._attr_supported_features = 0
+        self._attr_supported_features = ClimateEntityFeature(0)
         self._attr_hvac_modes = [HVACMode.OFF]
         self._heating = heating
         self._cooling = cooling
@@ -175,9 +155,9 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
 
         self._attr_current_temperature = None
         self._attr_current_humidity = None
-        self._target_temperature = None
-        self._local_offset = 0
-        self._local_target_temperature = None
+        self._target_temperature: float | None = None
+        self._local_offset: float = 0
+        self._local_target_temperature: float | None = None
 
         self._attr_hvac_mode = None
         self._attr_hvac_action = None
@@ -194,7 +174,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
         )
 
     @property
-    def target_temperature(self) -> float:
+    def target_temperature(self) -> float | None:
         if self._local_target_temperature is not None:
             return self._local_target_temperature
         return self._target_temperature
@@ -306,16 +286,17 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 message.human_readable_log,
             )
             self._target_temperature = message.set_temperature
-            self._local_target_temperature = (
-                self._target_temperature + self._local_offset
-            )
+            if self._target_temperature is not None:
+                self._local_target_temperature = (
+                    self._target_temperature + self._local_offset
+                )
         elif message.message_type == MESSAGE_TYPE_LOCAL_OFFSET:
             LOGGER.info(
                 "%s %s",
                 self._gateway_handler.log_id,
                 message.human_readable_log,
             )
-            self._local_offset = message.local_offset
+            self._local_offset = message.local_offset or 0
             if self._target_temperature is not None:
                 self._local_target_temperature = (
                     self._target_temperature + self._local_offset
@@ -327,9 +308,10 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 message.human_readable_log,
             )
             self._local_target_temperature = message.local_set_temperature
-            self._target_temperature = (
-                self._local_target_temperature - self._local_offset
-            )
+            if self._local_target_temperature is not None:
+                self._target_temperature = (
+                    self._local_target_temperature - self._local_offset
+                )
         elif message.message_type == MESSAGE_TYPE_MODE:
             if (
                 message.mode == CLIMATE_MODE_AUTO
@@ -421,9 +403,10 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 self._attr_hvac_mode = HVACMode.OFF
                 self._attr_hvac_action = HVACAction.OFF
             self._target_temperature = message.set_temperature
-            self._local_target_temperature = (
-                self._target_temperature + self._local_offset
-            )
+            if self._target_temperature is not None:
+                self._local_target_temperature = (
+                    self._target_temperature + self._local_offset
+                )
         elif message.message_type == MESSAGE_TYPE_ACTION:
             LOGGER.info(
                 "%s %s",

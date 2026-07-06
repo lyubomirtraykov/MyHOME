@@ -10,8 +10,9 @@ if TYPE_CHECKING:
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
+from OWNd.message import OWNMessage
 
-from .const import CONF_ENTITIES, CONF_PLATFORMS, DOMAIN
+from .const import DOMAIN
 
 
 class MyHOMEEntity(Entity):
@@ -59,9 +60,38 @@ class MyHOMEEntity(Entity):
         """Re-render availability when the gateway connection state changes."""
         self.async_write_ha_state()
 
+    @callback
+    def _handle_message(self, message: OWNMessage) -> None:
+        """Deliver a bus message addressed to this device to the handler."""
+        self.handle_event(message)
+
+    def handle_event(self, message: OWNMessage) -> None:
+        """Handle a bus message addressed to this device.
+
+        Default: ignore. Stateful entities override this; write-only ones
+        (e.g. the lock/unlock buttons) simply inherit the no-op.
+        """
+
+    async def async_update(self) -> None:
+        """Request a state refresh from the gateway.
+
+        Default: nothing to poll. Entities with a queryable state override
+        this with the appropriate status request.
+        """
+
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._platform] = self
+        # Receive every bus message addressed to this device. Replaces the
+        # old self-registration into a shared hass.data dict: subscription is
+        # cleaned up automatically on removal, and a message for a device
+        # without subscribers dies silently instead of risking a KeyError.
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self._hass,
+                self._gateway_handler.entity_signal(self._device_id),
+                self._handle_message,
+            )
+        )
         # Re-render this entity whenever the gateway availability flips.
         self.async_on_remove(
             async_dispatcher_connect(
@@ -71,8 +101,3 @@ class MyHOMEEntity(Entity):
             )
         )
         await self.async_update()
-
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if self._platform in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES]:
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._platform]

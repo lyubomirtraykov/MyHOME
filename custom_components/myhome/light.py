@@ -13,9 +13,7 @@ from homeassistant.components.light import (
 )
 from homeassistant.const import (
     CONF_NAME,
-    CONF_MAC,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -25,8 +23,6 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_ICON,
     CONF_ICON_ON,
@@ -36,26 +32,26 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_DEVICE_MODEL,
     CONF_DIMMABLE,
-    DOMAIN,
     LOGGER,
 )
+from .models import MyHomeConfigEntry
 from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MyHomeConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    if PLATFORM not in config_entry.runtime_data.platforms_config:
         return
 
-    _lights = []
-    _configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+    _lights: list[MyHOMELight] = []
+    _configured_lights = config_entry.runtime_data.platforms_config[PLATFORM]
 
     for _light in _configured_lights:
-        _light = MyHOMELight(
+        _entity = MyHOMELight(
             hass=hass,
             device_id=_light,
             who=_configured_lights[_light][CONF_WHO],
@@ -68,21 +64,11 @@ async def async_setup_entry(
             dimmable=_configured_lights[_light][CONF_DIMMABLE],
             manufacturer=_configured_lights[_light][CONF_MANUFACTURER],
             model=_configured_lights[_light][CONF_DEVICE_MODEL],
-            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+            gateway=config_entry.runtime_data.gateway_handler,
         )
-        _lights.append(_light)
+        _lights.append(_entity)
 
     async_add_entities(_lights)
-
-
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return
-
-    _configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
-
-    for _light in _configured_lights:
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_light]
 
 
 def eight_bits_to_percent(value: int) -> int:
@@ -127,7 +113,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         self._interface = interface
         self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
 
-        self._attr_supported_features = 0
+        self._attr_supported_features = LightEntityFeature(0)
         self._attr_supported_color_modes: set[ColorMode] = set()
 
         if dimmable:
@@ -222,6 +208,14 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             self._gateway_handler.log_id,
             message.human_readable_log,
         )
+        if message.brightness_preset:
+            # Preset frames (states 2-10) mean "on" but carry no absolute
+            # level: query the dimmer for its actual brightness. (This logic
+            # used to live in the gateway's listening loop.)
+            self._attr_is_on = True
+            self._hass.async_create_task(self.async_update())
+            self.async_schedule_update_ha_state()
+            return
         # is_on is None for frames that carry no on/off state (e.g. PIR or
         # illuminance dimensions): don't overwrite the known state with them.
         if message.is_on is not None:

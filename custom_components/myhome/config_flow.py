@@ -194,8 +194,10 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(self, config: dict = None):
+    async def async_step_reauth(self, config: dict | None = None):
         """Perform reauth upon an authentication error."""
+        # HA always starts the reauth flow with the entry data attached.
+        assert config is not None
 
         self._existing_entry = await self.async_set_unique_id(config[CONF_MAC])
 
@@ -292,6 +294,8 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         """
         if errors is None:
             errors = {}
+        # Every path into this step has set the gateway first.
+        assert self.gateway_handler is not None
         if user_input is not None:
             # Validate user input
             if 1 <= int(user_input[CONF_PORT]) <= 65535:
@@ -321,6 +325,8 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         """
         if errors is None:
             errors = {}
+        # Every path into this step has set the gateway first.
+        assert self.gateway_handler is not None
         if user_input is not None:
             # Validate user input
             self.gateway_handler.password = str(user_input[CONF_OWN_PASSWORD])

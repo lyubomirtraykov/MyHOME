@@ -1,5 +1,5 @@
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 # Default E/F plus the bug-hunting families:
@@ -7,3 +7,20 @@ target-version = "py313"
 # SIM = simplifications                UP    = outdated syntax
 # RET = inconsistent returns           PLE/PLW = pylint errors/warnings
 select = ["E4", "E7", "E9", "F", "B", "ASYNC", "SIM", "UP", "RET", "PLE", "PLW"]
+
+[tool.mypy]
+python_version = "3.14"
+check_untyped_defs = true
+warn_unused_ignores = true
+# voluptuous and OWNd consumers live at dict[str, Any] altitude by design
+disable_error_code = []
+
+[[tool.mypy.overrides]]
+module = "OWNd.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "custom_components.myhome.config_flow"
+# The flow stores host/name/mac in self.context for its own description
+# placeholders; HA types ConfigFlowContext strictly but supports extra keys.
+disable_error_code = ["typeddict-item"]

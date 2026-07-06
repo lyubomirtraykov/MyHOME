@@ -7,11 +7,8 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import (
     CONF_NAME,
-    CONF_MAC,
-    CONF_ENTITIES,
     STATE_ON,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -27,8 +24,6 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_WHO,
     CONF_WHERE,
@@ -36,9 +31,9 @@ from .const import (
     CONF_DEVICE_MODEL,
     CONF_DEVICE_CLASS,
     CONF_INVERTED,
-    DOMAIN,
     LOGGER,
 )
+from .models import MyHomeConfigEntry
 from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
@@ -48,20 +43,20 @@ PIR_SENSITIVITY = ["low", "medium", "high", "very high"]
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MyHomeConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    if PLATFORM not in config_entry.runtime_data.platforms_config:
         return
 
-    _binary_sensors = []
-    _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+    _binary_sensors: list[MyHOMEEntity] = []
+    _configured_binary_sensors = config_entry.runtime_data.platforms_config[PLATFORM]
 
     for _binary_sensor in _configured_binary_sensors:
         _who = int(_configured_binary_sensors[_binary_sensor][CONF_WHO])
         _device_class = _configured_binary_sensors[_binary_sensor][CONF_DEVICE_CLASS]
         if _who == 25:
-            _binary_sensor = MyHOMEDryContact(
+            _entity: MyHOMEEntity = MyHOMEDryContact(
                 hass=hass,
                 device_id=_binary_sensor,
                 who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
@@ -72,11 +67,11 @@ async def async_setup_entry(
                 device_class=_device_class,
                 manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
                 model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                gateway=config_entry.runtime_data.gateway_handler,
             )
-            _binary_sensors.append(_binary_sensor)
+            _binary_sensors.append(_entity)
         elif _who == 9:
-            _binary_sensor = MyHOMEAuxiliary(
+            _entity = MyHOMEAuxiliary(
                 hass=hass,
                 device_id=_binary_sensor,
                 who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
@@ -87,11 +82,11 @@ async def async_setup_entry(
                 device_class=_device_class,
                 manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
                 model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                gateway=config_entry.runtime_data.gateway_handler,
             )
-            _binary_sensors.append(_binary_sensor)
+            _binary_sensors.append(_entity)
         elif _who == 1 and _device_class == BinarySensorDeviceClass.MOTION:
-            _binary_sensor = MyHOMEMotionSensor(
+            _entity = MyHOMEMotionSensor(
                 hass=hass,
                 device_id=_binary_sensor,
                 who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
@@ -102,21 +97,11 @@ async def async_setup_entry(
                 device_class=_device_class,
                 manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
                 model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                gateway=config_entry.runtime_data.gateway_handler,
             )
-            _binary_sensors.append(_binary_sensor)
+            _binary_sensors.append(_entity)
 
     async_add_entities(_binary_sensors)
-
-
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return
-
-    _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
-
-    for _binary_sensor in _configured_binary_sensors:
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_binary_sensor]
 
 
 class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
@@ -129,7 +114,7 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
         who: str,
         where: str,
         inverted: bool,
-        device_class: str,
+        device_class: BinarySensorDeviceClass,
         manufacturer: str,
         model: str,
         gateway: MyHOMEGatewayHandler,
@@ -155,16 +140,6 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
 
         self._attr_is_on = False
         self._attr_extra_state_attributes = {"Sensor": f"({self._where[0]}){self._where[1:]}"}
-
-    async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
-        await self.async_update()
-
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if self._attr_device_class in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES]:
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._attr_device_class]
 
     async def async_update(self):
         """Update the entity.
@@ -194,7 +169,7 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
         who: str,
         where: str,
         inverted: bool,
-        device_class: str,
+        device_class: BinarySensorDeviceClass,
         manufacturer: str,
         model: str,
         gateway: MyHOMEGatewayHandler,
@@ -221,16 +196,6 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
         self._attr_is_on = False
         self._attr_extra_state_attributes = {"Auxiliary channel": self._where}
 
-    async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
-        await self.async_update()
-
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if self._attr_device_class in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES]:
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._attr_device_class]
-
     async def async_update(self):
         """AUX sensors are read only and cannot be queried, no async_update implementation."""
 
@@ -255,7 +220,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
         who: str,
         where: str,
         inverted: bool,
-        device_class: str,
+        device_class: BinarySensorDeviceClass,
         manufacturer: str,
         model: str,
         gateway: MyHOMEGatewayHandler,
@@ -274,7 +239,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
 
         self._inverted = inverted
         self._attr_force_update = False
-        self._last_updated = None
+        self._last_updated: datetime | None = None
         self._timeout = timedelta(seconds=315)
 
         self._attr_device_class = device_class
@@ -292,19 +257,14 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
+        # Base class: dispatcher subscriptions + first async_update.
+        await super().async_added_to_hass()
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_pir_sensitivity(self._where))
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_motion_timeout(self._where))
         state = await self.async_get_last_state()
         if state:
             self._attr_is_on = state.state == STATE_ON
             self._last_updated = state.last_updated
-        await self.async_update()
-
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if self._attr_device_class in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES]:
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._attr_device_class]
 
     async def async_update(self):
         """Update the entity.

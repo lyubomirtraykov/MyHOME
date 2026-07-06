@@ -55,7 +55,7 @@ from .const import (
 )
 
 
-def format_mac(address: str) -> str:
+def format_mac(address: str) -> str | None:
     mac = re.sub("[.:-]", "", address).upper()
     mac = "".join(mac.split())
     if len(mac) != 12 or not mac.isalnum() or re.search("[G-Z]", mac) is not None:
@@ -168,7 +168,7 @@ class BusInterface:
 class MyHomeConfigSchema(Schema):
     def __call__(self, data):
         data = super().__call__(data)
-        _rekeyed_data = {}
+        _rekeyed_data: dict = {}
         for gateway in data:
             _rekeyed_data[data[gateway][CONF_MAC]] = {}
             _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS] = {}
@@ -201,7 +201,7 @@ class MyHomeConfigSchema(Schema):
 class MyHomeDeviceSchema(Schema):
     def __call__(self, data):
         data = super().__call__(data)
-        _rekeyed_data = {}
+        _rekeyed_data: dict = {}
 
         for device in data:
             data[device][CONF_ENTITIES] = {}
@@ -234,7 +234,7 @@ class MyHomeDeviceSchema(Schema):
 class MyHomeSensorSchema(Schema):
     def __call__(self, data):
         data = super().__call__(data)
-        _rekeyed_data = {}
+        _rekeyed_data: dict = {}
 
         for device in data:
             data[device][CONF_ENTITIES] = {}

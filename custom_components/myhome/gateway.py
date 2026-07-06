@@ -2,13 +2,7 @@
 import asyncio
 import contextlib
 
-from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.sensor import (
-    DOMAIN as SENSOR,
-)
 from homeassistant.const import (
-    CONF_ENTITIES,
     CONF_FRIENDLY_NAME,
     CONF_HOST,
     CONF_MAC,
@@ -38,10 +32,6 @@ from OWNd.message import (
     OWNMessage,
 )
 
-from .button import (
-    DisableCommandButtonEntity,
-    EnableCommandButtonEntity,
-)
 from .const import (
     CONF_DEVICE_TYPE,
     CONF_FIRMWARE,
@@ -49,7 +39,6 @@ from .const import (
     CONF_LONG_RELEASE,
     CONF_MANUFACTURER,
     CONF_MANUFACTURER_URL,
-    CONF_PLATFORMS,
     CONF_SHORT_PRESS,
     CONF_SHORT_RELEASE,
     CONF_SSDP_LOCATION,
@@ -58,7 +47,6 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
 
 # Max time a command worker waits for the event session to come up before it
 # gives up (the OWNd connect() already retries internally with backoff).
@@ -103,7 +91,7 @@ class MyHOMEGatewayHandler:
         self._event_session_ready = asyncio.Event()  # Nuovo evento per sincronizzazione
         self.listening_worker: asyncio.Task | None = None
         self.sending_workers: list[asyncio.Task] = []
-        self.send_buffer = asyncio.Queue()
+        self.send_buffer: asyncio.Queue[dict] = asyncio.Queue()
 
     @property
     def mac(self) -> str:
@@ -142,6 +130,14 @@ class MyHOMEGatewayHandler:
     def availability_signal(self) -> str:
         """Dispatcher signal fired when the gateway availability changes."""
         return f"{DOMAIN}_{self.mac}_availability"
+
+    def entity_signal(self, device_id: str) -> str:
+        """Dispatcher signal carrying bus messages addressed to one device.
+
+        Every entity of the device subscribes to it in async_added_to_hass;
+        the listener fires it with the parsed OWNMessage as payload.
+        """
+        return f"{DOMAIN}_{self.mac}_{device_id}"
 
     @callback
     def _on_connection_state_change(self, connected: bool) -> None:
@@ -246,15 +242,13 @@ class MyHOMEGatewayHandler:
                             message,
                         )
                     elif isinstance(message, OWNEnergyEvent):
-                        if SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS] and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR]:
-                            for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES]:
-                                if isinstance(
-                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity],
-                                    MyHOMEEntity,
-                                ):
-                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity].handle_event(message)
-                        else:
-                            continue
+                        # Every entity of the addressed device is subscribed to
+                        # this signal and filters by message type on its own; a
+                        # message for an unconfigured device has no subscribers
+                        # and dies silently.
+                        async_dispatcher_send(
+                            self.hass, self.entity_signal(message.entity), message
+                        )
                     elif isinstance(
                         message,
                         (
@@ -345,37 +339,16 @@ class MyHOMEGatewayHandler:
                                         },
                                     )
                             if not is_event:
-                                if isinstance(message, OWNLightingEvent) and message.brightness_preset:
-                                    # A preset event may refer to a light that is not
-                                    # configured (or the light platform may be absent):
-                                    # never index the shared dict blindly.
-                                    _light_devices = self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS].get(LIGHT, {})
-                                    _light_entity = (
-                                        _light_devices[message.entity][CONF_ENTITIES].get(LIGHT)
-                                        if message.entity in _light_devices
-                                        else None
-                                    )
-                                    if isinstance(_light_entity, MyHOMEEntity):
-                                        await _light_entity.async_update()
-                                else:
-                                    for _platform in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
-                                        if _platform != BUTTON and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform]:
-                                            for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES]:
-                                                if (
-                                                    isinstance(
-                                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                        MyHOMEEntity,
-                                                    )
-                                                    and not isinstance(
-                                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                        DisableCommandButtonEntity,
-                                                    )
-                                                    and not isinstance(
-                                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                        EnableCommandButtonEntity,
-                                                    )
-                                                ):
-                                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity].handle_event(message)
+                                # Point-to-point message: deliver to whoever is
+                                # subscribed for this device (all its entities,
+                                # across platforms). The brightness-preset
+                                # follow-up query now lives inside the light
+                                # entity's own handler.
+                                async_dispatcher_send(
+                                    self.hass,
+                                    self.entity_signal(message.entity),
+                                    message,
+                                )
 
                         else:
                             LOGGER.debug(
