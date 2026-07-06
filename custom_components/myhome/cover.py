@@ -139,16 +139,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position.
 
-        The extremes are mapped to the plain UP/DOWN commands: gateways such
-        as the MH201 NACK the advanced "go to level 0" (and level 100 is
-        safer as a plain UP too), while the simple commands always work.
+        Position 0 is mapped to the plain DOWN command: gateways such as the
+        MH201 NACK the advanced "go to level 0" (observed in the field), while
+        every other level — including 100 — is accepted as-is.
         """
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
             if position <= 0:
                 await self._gateway_handler.send(OWNAutomationCommand.lower_shutter(self._full_where))
-            elif position >= 100:
-                await self._gateway_handler.send(OWNAutomationCommand.raise_shutter(self._full_where))
             else:
                 await self._gateway_handler.send(OWNAutomationCommand.set_shutter_level(self._full_where, position))
 
