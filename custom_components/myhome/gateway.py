@@ -418,14 +418,17 @@ class MyHOMEGatewayHandler:
                             self.log_id,
                             message.human_readable_log,
                         )
-                    elif (
-                        isinstance(message, OWNEvent)
-                        and message.who is not None
-                        and message.who > 1000
+                    elif isinstance(message, (OWNEvent, OWNCommand)) and (
+                        (message.who is not None and message.who > 1000)
+                        or message.dimension == 1000
                     ):
-                        # Diagnostic/translation chatter (WHO > 1000, e.g.
-                        # actuator status bitmasks): routine bus noise, not
-                        # worth an INFO "unsupported" entry.
+                        # Diagnostic/translation chatter: WHO > 1000 (actuator
+                        # status bitmasks) or dimension 1000 (e.g. the frame an
+                        # MH201 emits after an advanced shutter positioning,
+                        # `*#2*WHERE*#1000#11#001#N*V##`). Routine bus noise,
+                        # not worth an INFO "unsupported" entry.
+                        # NB: guarded by the isinstance — OWNSignaling has no
+                        # who/dimension attributes.
                         LOGGER.debug(
                             "%s Diagnostic message: `%s`",
                             self.log_id,

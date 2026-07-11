@@ -81,6 +81,11 @@ class MyHOMEEntity(Entity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
+        # Keep the cooperative MRO chain intact: entities that also inherit
+        # RestoreEntity (motion sensor, HA's ButtonEntity) rely on their
+        # async_added_to_hass running too, or their state is never saved for
+        # the next restart.
+        await super().async_added_to_hass()
         # Receive every bus message addressed to this device. Replaces the
         # old self-registration into a shared hass.data dict: subscription is
         # cleaned up automatically on removal, and a message for a device
