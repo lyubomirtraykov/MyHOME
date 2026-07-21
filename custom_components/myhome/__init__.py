@@ -24,6 +24,8 @@ from voluptuous import Invalid
 from .const import (
     ATTR_GATEWAY,
     ATTR_MESSAGE,
+    CEN_KIND,
+    CEN_PLUS_KIND,
     CONF_DEVICE_CLASS,
     CONF_ENTITIES,
     CONF_FILE_PATH,
@@ -38,6 +40,15 @@ from .models import MyHomeConfigEntry, MyHomeRuntimeData
 from .validate import config_schema, format_mac
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+def _is_scenario_control(device_entry: dr.DeviceEntry) -> bool:
+    """True for the stateless CEN/CEN+ controls registered on first press."""
+    return any(
+        domain == DOMAIN
+        and (f"-{CEN_KIND}-" in identifier or f"-{CEN_PLUS_KIND}-" in identifier)
+        for domain, identifier in device_entry.identifiers
+    )
 
 
 def _resolve_gateway_handler(
@@ -273,6 +284,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyHomeConfigEntry) -> bo
         device_entry.id
         for device_entry in device_registry.devices.values()
         if entry.entry_id in device_entry.config_entries
+        # CEN/CEN+ controls are stateless: they own no entity by design, so the
+        # "no entities left -> remove" rule below would wipe them at every
+        # restart. They are discovered by activation and must survive.
+        and not _is_scenario_control(device_entry)
     ]
 
     configured_entities = []
