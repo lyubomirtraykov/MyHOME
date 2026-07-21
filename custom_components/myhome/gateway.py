@@ -11,6 +11,7 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 from OWNd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
@@ -33,6 +34,8 @@ from OWNd.message import (
 )
 
 from .const import (
+    CEN_KIND,
+    CEN_PLUS_KIND,
     CONF_DEVICE_TYPE,
     CONF_FIRMWARE,
     CONF_LONG_PRESS,
@@ -46,6 +49,9 @@ from .const import (
     CONF_UDN,
     DOMAIN,
     LOGGER,
+    SCENARIO_CONTROL_MODELS,
+    SCENARIO_CONTROL_NAMES,
+    scenario_control_id,
 )
 
 # Max time a command worker waits for the event session to come up before it
@@ -92,6 +98,8 @@ class MyHOMEGatewayHandler:
         self.listening_worker: asyncio.Task | None = None
         self.sending_workers: list[asyncio.Task] = []
         self.send_buffer: asyncio.Queue[dict] = asyncio.Queue()
+        # CEN/CEN+ controls already added to the device registry this session.
+        self._known_scenario_controls: set[tuple[str, int]] = set()
 
     @property
     def mac(self) -> str:
@@ -138,6 +146,35 @@ class MyHOMEGatewayHandler:
         the listener fires it with the parsed OWNMessage as payload.
         """
         return f"{DOMAIN}_{self.mac}_{device_id}"
+
+    @callback
+    def _register_scenario_control(self, kind: str, object_id: int) -> None:
+        """Register a CEN/CEN+ control in the device registry on first use.
+
+        These controls carry no state and therefore have no entities: they exist
+        purely so their buttons can be picked as device triggers in the
+        automation UI. Discovery is by activation — press a button once and the
+        control appears.
+        """
+        key = (kind, object_id)
+        if key in self._known_scenario_controls:
+            return
+        self._known_scenario_controls.add(key)
+        dr.async_get(self.hass).async_get_or_create(
+            config_entry_id=self.config_entry.entry_id,
+            identifiers={(DOMAIN, scenario_control_id(self.mac, kind, object_id))},
+            name=f"{SCENARIO_CONTROL_NAMES[kind]} {object_id}",
+            manufacturer=self.manufacturer,
+            model=SCENARIO_CONTROL_MODELS[kind],
+            via_device=(DOMAIN, self.unique_id),
+        )
+        LOGGER.info(
+            "%s Registered %s control %s (press its buttons to use them as "
+            "device triggers).",
+            self.log_id,
+            SCENARIO_CONTROL_NAMES[kind],
+            object_id,
+        )
 
     @callback
     def _on_connection_state_change(self, connected: bool) -> None:
@@ -374,9 +411,16 @@ class MyHOMEGatewayHandler:
                             event = CONF_LONG_RELEASE
                         else:
                             event = None
+                        # Register the control as a device the first time it is
+                        # used, so its buttons become selectable as device
+                        # triggers in the automation UI (no YAML needed).
+                        self._register_scenario_control(
+                            CEN_PLUS_KIND, int(message.object)
+                        )
                         self.hass.bus.async_fire(
                             "myhome_cenplus_event",
                             {
+                                "mac": self.mac,
                                 "object": int(message.object),
                                 "pushbutton": int(message.push_button),
                                 "event": event,
@@ -399,9 +443,13 @@ class MyHOMEGatewayHandler:
                             event = CONF_LONG_RELEASE
                         else:
                             event = None
+                        self._register_scenario_control(
+                            CEN_KIND, int(message.object)
+                        )
                         self.hass.bus.async_fire(
                             "myhome_cen_event",
                             {
+                                "mac": self.mac,
                                 "object": int(message.object),
                                 "pushbutton": int(message.push_button),
                                 "event": event,

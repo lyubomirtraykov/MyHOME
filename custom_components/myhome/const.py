@@ -46,3 +46,29 @@ CONF_SHORT_PRESS = "pushbutton_short_press"
 CONF_SHORT_RELEASE = "pushbutton_short_release"
 CONF_LONG_PRESS = "pushbutton_long_press"
 CONF_LONG_RELEASE = "pushbutton_long_release"
+
+# --- CEN / CEN+ scenario controls -------------------------------------------
+# Stateless wall controls: they own no entity, they are registered as devices
+# only so their buttons can be used as device triggers in the automation UI.
+CEN_KIND = "cen"
+CEN_PLUS_KIND = "cenplus"
+
+SCENARIO_CONTROL_NAMES = {CEN_KIND: "CEN", CEN_PLUS_KIND: "CEN+"}
+SCENARIO_CONTROL_MODELS = {
+    CEN_KIND: "CEN scenario control",
+    CEN_PLUS_KIND: "CEN+ scenario control",
+}
+# Bus event carrying the button presses of each kind.
+SCENARIO_CONTROL_EVENTS = {
+    CEN_KIND: "myhome_cen_event",
+    CEN_PLUS_KIND: "myhome_cenplus_event",
+}
+# Buttons offered in the automation UI. The protocol allows 0-31, but physical
+# wall plates never go past 8; higher buttons stay reachable via a YAML event
+# trigger.
+SCENARIO_CONTROL_BUTTONS = range(1, 9)
+
+
+def scenario_control_id(mac: str, kind: str, object_id: int) -> str:
+    """Device-registry identifier of a CEN/CEN+ control."""
+    return f"{mac}-{kind}-{object_id}"

@@ -2,6 +2,9 @@
 .vscode
 .VSCodeCounter/
 
+# graphify output (local knowledge-graph cache, regenerated on demand)
+graphify-out/
+
 # macOS
 .DS_Store
 
