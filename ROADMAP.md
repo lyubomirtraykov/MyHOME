@@ -1,6 +1,6 @@
 # MyHOME — Roadmap
 
-Stato al 2026-07-21 · versione corrente **0.9.83** (OWNd **v1.0.10**)
+Stato al 2026-07-21 · versione corrente **0.9.84** (OWNd **v1.0.10**)
 
 ---
 
@@ -22,40 +22,69 @@ routine tutte silenziose, recupero automatico anche da saturazione degli slot di
 
 ---
 
-## P1 — Eventi scenario (WHO=0) ⭐ priorità massima
+## ✅ Fatto in 0.9.84 — Device trigger per CEN / CEN+
 
-**Obiettivo:** usare le placche scenario a muro come telecomandi per **qualsiasi** entità di
-Home Assistant (luci Hue, Sonos, automazioni generiche, ...), senza doverle riconfigurare
-fisicamente come moduli CEN/CEN+.
+I pulsanti a muro CEN/CEN+ sono ora usabili **dall'interfaccia automazioni**, senza YAML:
+il controllo si registra come dispositivo alla prima pressione (scoperta per attivazione) ed
+espone due tendine — cosa è successo (pressione breve / prolungata / rilascio) e quale
+pulsante (1-8). Gli eventi `myhome_cen_event` / `myhome_cenplus_event` includono ora anche
+il `mac` del gateway.
 
-**Perché è prioritario:** l'app *Home + Project* consente di creare **scenari**, ma non espone
-la configurazione CEN+. Gli scenari sono quindi la via praticabile per intercettare le
-pressioni dei pulsanti fisici su questo impianto.
+Verificato sul campo: CEN+ oggetto 1, pulsante 1 (frame `*25*21#1*21##`).
 
-**Punto di partenza favorevole:** OWNd già riconosce e parsa questi frame
-(`OWNScenarioEvent`, con `scenario` e `control_panel`). Manca solo il lato integrazione:
-oggi finiscono nel ramo "Unsupported message type".
-
-Da implementare:
-
-1. **Dispatch nel gateway** — riconoscere `OWNScenarioEvent` e pubblicare l'evento HA
-   `myhome_scenario_event` con payload `scenario` + `control_panel`.
-2. **Auto-registrazione dei moduli scenario** nel device registry alla prima pressione
-   (nessuna configurazione manuale in `myhome.yaml`).
-3. **Device triggers** (`device_trigger.py`) — i pulsanti diventano trigger selezionabili dal
-   **menù a tendina dell'UI automazioni** ("Pulsante 1 premuto"), senza scrivere YAML né
-   ascoltare eventi grezzi.
-
-**Attenzione al pruning:** i moduli scenario sono dispositivi *stateless* (nessuna entità).
-La logica di pulizia del registry va adattata perché non li cancelli a ogni riavvio.
-
-**Test preliminare (prima di scrivere codice):** premere un pulsante scenario e verificare nei
-log la comparsa di un frame WHO=0. Se non arriva nulla, l'impianto non ha moduli scenario
-attivi e la feature non ha bersaglio.
+**Nota d'uso:** durante una pressione prolungata il bus ripete il frame "ancora premuto", che
+genera più eventi `long_press` consecutivi. Per un'azione singola usare il trigger di
+**rilascio**; il `long_press` ripetuto è invece utile per regolazioni progressive
+(es. dimmerare finché si tiene premuto).
 
 ---
 
-## P2 — Discovery / auto-apprendimento dispositivi
+## P1 — Device trigger per i comandi di gruppo / area / generale
+
+**Obiettivo:** stessa ergonomia dei CEN+, estesa ai pulsanti configurati come **comandi di
+gruppo** (o area/generale), che oggi generano eventi utilizzabili solo scrivendo YAML.
+
+Questi comandi sono già riconosciuti e pubblicati come eventi
+(`myhome_group_automation_event`, `myhome_area_automation_event`,
+`myhome_general_automation_event` e i corrispettivi per le luci), ma:
+
+1. non vengono loggati (nessuna traccia a INFO: la diagnostica è cieca);
+2. non compaiono come dispositivi, quindi non sono selezionabili dall'UI automazioni.
+
+Da implementare: logging coerente con gli altri eventi + registrazione come dispositivi
+(alla prima pressione, come per i CEN+) + device trigger con l'azione come sottotipo
+(apri / chiudi / stop, acceso / spento).
+
+**Bersaglio reale già osservato:** un pulsante che comanda il gruppo 1 delle tapparelle
+(`*2*0*#1##` seguito da `*2*2*#1##`).
+
+---
+
+## P2 — Moduli scenario (WHO=0)
+
+**Cosa sono:** i *moduli/centraline scenario* (es. programmatori scenari) che annunciano sul
+bus "è stato lanciato lo scenario N dal pannello X". Sono una **funzione distinta** dai
+pulsanti CEN/CEN+: non li sostituiscono e non ne sono sostituiti.
+
+**Punto di partenza favorevole:** OWNd già riconosce e parsa questi frame
+(`OWNScenarioEvent`, con `scenario` e `control_panel`). Manca solo il lato integrazione: oggi
+finiscono nel ramo "Unsupported message type".
+
+Da implementare (stesso schema già collaudato con i CEN+):
+
+1. **Dispatch nel gateway** — pubblicare l'evento HA `myhome_scenario_event` con payload
+   `scenario` + `control_panel` (+ `mac`).
+2. **Auto-registrazione** del modulo nel device registry alla prima attivazione.
+3. **Device trigger** per i singoli scenari.
+
+**Perché non è in cima:** sull'impianto di riferimento **non è mai stato osservato un solo
+frame WHO=0** — non c'è hardware su cui verificare l'implementazione. Da riprendere se e
+quando un modulo scenario entra in impianto: il test è immediato (attivare uno scenario e
+cercare un frame WHO=0 nei log).
+
+---
+
+## P3 — Discovery / auto-apprendimento dispositivi
 
 **Obiettivo:** ridurre (o eliminare) la compilazione manuale di `myhome.yaml`.
 
@@ -77,7 +106,7 @@ in rapida successione.
 
 ---
 
-## P3 — CI su GitHub
+## P4 — CI su GitHub
 
 **Obiettivo:** validazione automatica a ogni push/PR, senza controlli manuali.
 
@@ -93,7 +122,7 @@ Costo minimo (due workflow YAML), beneficio permanente.
 
 ---
 
-## P4 — Estensioni dipendenti dall'hardware
+## P5 — Estensioni dipendenti dall'hardware
 
 Da valutare **solo se e quando** l'hardware corrispondente è presente in impianto: ognuna
 aggiunge superficie di codice da mantenere.
@@ -109,7 +138,7 @@ aggiunge superficie di codice da mantenere.
 
 ---
 
-## P5 — Polishing residuo
+## P6 — Polishing residuo
 
 - `CONF_ENTITY` in `const.py` è definita ma non più utilizzata dopo la migrazione a
   `runtime_data`: rimuovibile.
