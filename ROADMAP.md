@@ -106,19 +106,20 @@ in rapida successione.
 
 ---
 
-## P4 — CI su GitHub
+## ✅ Fatto — CI su GitHub
 
-**Obiettivo:** validazione automatica a ogni push/PR, senza controlli manuali.
+Validazione automatica a ogni push/PR (più un check giornaliero programmato):
 
-1. **hassfest** — il validatore ufficiale di Home Assistant: verifica `manifest.json`
-   (chiavi obbligatorie, versione, requirements, dichiarazioni SSDP) e la struttura
-   dell'integrazione.
-2. **HACS validate** — verifica che il repository sia conforme ai requisiti HACS
-   (release, struttura, `hacs.json`).
-3. **Qualità del codice** — eseguire in CI `ruff` e `mypy`, già configurati localmente in
-   `pyproject.toml`: impedisce che regressioni di stile/tipi entrino nel repo.
-
-Costo minimo (due workflow YAML), beneficio permanente.
+1. **hassfest** (`.github/workflows/hassfest.yml`) — già presente nel repository, verifica
+   `manifest.json` e la struttura dell'integrazione. Aggiornata solo la versione di
+   `actions/checkout`.
+2. **HACS validate** (`.github/workflows/validate.yml`) — già presente, verifica la
+   conformità ai requisiti HACS. Stesso aggiornamento.
+3. **Qualità del codice** (`.github/workflows/lint.yml`, nuovo) — esegue `ruff` e `mypy`
+   sulla stessa configurazione di `pyproject.toml` usata localmente. `mypy` installa
+   `homeassistant` (per risolvere gli import) e OWNd **dall'esatto tag pinnato nel
+   manifest** (letto dinamicamente, mai hardcoded: non si disallinea quando bumpiamo
+   OWNd).
 
 ---
 

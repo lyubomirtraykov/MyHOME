@@ -1,0 +1,42 @@
+name: Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ruff:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.14"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Run ruff
+        run: ruff check custom_components/
+
+  mypy:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.14"
+          cache: "pip"
+      - name: Read pinned OWNd requirement from the manifest
+        id: ownd
+        run: |
+          REQ=$(python3 -c "import json; print(json.load(open('custom_components/myhome/manifest.json'))['requirements'][0])")
+          echo "requirement=$REQ" >> "$GITHUB_OUTPUT"
+      - name: Install dependencies
+        # homeassistant is installed so mypy can resolve the homeassistant.*
+        # imports the integration relies on; OWNd is installed from the exact
+        # git tag pinned in manifest.json, so type-checking always matches
+        # what actually ships.
+        run: |
+          pip install mypy types-PyYAML homeassistant
+          pip install "${{ steps.ownd.outputs.requirement }}"
+      - name: Run mypy
+        run: mypy --explicit-package-bases custom_components/myhome/
