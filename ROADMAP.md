@@ -1,6 +1,6 @@
 # MyHOME — Roadmap
 
-Stato al 2026-07-21 · versione corrente **0.9.84** (OWNd **v1.0.10**)
+Stato al 2026-07-29 · versione corrente **0.9.86** (OWNd **v1.0.10**)
 
 ---
 
@@ -22,7 +22,7 @@ routine tutte silenziose, recupero automatico anche da saturazione degli slot di
 
 ---
 
-## ✅ Fatto in 0.9.84 — Device trigger per CEN / CEN+
+## ✅ Fatto in 0.9.86 — Device trigger per CEN / CEN+ (validati sul campo)
 
 I pulsanti a muro CEN/CEN+ sono ora usabili **dall'interfaccia automazioni**, senza YAML:
 il controllo si registra come dispositivo alla prima pressione (scoperta per attivazione) ed
@@ -36,6 +36,13 @@ Verificato sul campo: CEN+ oggetto 1, pulsante 1 (frame `*25*21#1*21##`).
 genera più eventi `long_press` consecutivi. Per un'azione singola usare il trigger di
 **rilascio**; il `long_press` ripetuto è invece utile per regolazioni progressive
 (es. dimmerare finché si tiene premuto).
+
+**Soak 24-29 luglio (5 giorni, 6.382 righe di log MyHOME):** zero errori, zero traceback,
+zero eventi scartati dai guard. 128 riconnessioni tutte di routine (media 56.7 min, nessuna
+fuori dal range atteso), zero give-up, zero periodi di indisponibilità, nessun buco di
+attività. 11 auto-riparazioni della sessione comando risolte tutte al primo tentativo
+(~50 ms). Controllo CEN+ sopravvissuto al riavvio: il fix del pruning dei dispositivi
+stateless è confermato.
 
 ---
 
