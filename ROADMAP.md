@@ -46,7 +46,43 @@ stateless è confermato.
 
 ---
 
-## P1 — Device trigger per i comandi di gruppo / area / generale
+## P1a — Scenari memorizzati lanciabili da Home Assistant
+
+**Obiettivo:** esporre gli scenari memorizzati nel gateway come entità `scene` di Home
+Assistant, così da poterli attivare dalla UI, dalle automazioni e dagli assistenti vocali —
+mantenendo la programmazione dello scenario dove l'utente la crea (app/MyHOME_Suite) e usando
+HA solo come innesco.
+
+**Punto di partenza molto favorevole: OWNd non richiede alcuna modifica.** Verificato che
+funzionano già entrambe le direzioni:
+
+- **lancio**: il frame `*17*1*N##` è già valido e accettato (oggi funziona anche solo col
+  servizio `myhome.send_message`, senza codice nuovo);
+- **feedback**: gli eventi WHO=17 sono già interpretati (`OWNSceneEvent`: started / stopped /
+  enabled / disabled) e producono un `entity` id (`17-N`) che si innesta direttamente nel
+  routing a dispatcher esistente.
+
+Da implementare:
+
+1. **Piattaforma `scene`** — uno scenario configurato in `myhome.yaml` diventa un'entità che
+   invia il comando di attivazione.
+2. **Dispatch degli eventi WHO=17** nel gateway, per il feedback di stato (oggi finirebbero
+   nel ramo "Unsupported message type").
+
+**Da verificare prima di scrivere codice** (test immediato, senza modifiche): inviare
+`*17*1*N##` con `myhome.send_message` e osservare se lo scenario parte e se compare un evento
+`Scene N is started`. Sull'impianto di riferimento (MH201, che da catalogo memorizza fino a 50
+scenari) **non è ancora stato osservato un solo frame WHO=17 o WHO=0**: va confermato che gli
+scenari creati dall'app siano effettivamente indirizzabili come scene WHO=17, altrimenti
+occorre prima capire dove sono memorizzati.
+
+**Nota:** l'esposizione dei *programmi del riscaldamento* come entità `select` (programma
+caldo/freddo) è una funzione affine ma distinta, subordinata alla presenza di hardware di
+termoregolazione: vedi P5.
+
+---
+
+## P1b — Device trigger per i comandi di gruppo / area / generale
 
 **Obiettivo:** stessa ergonomia dei CEN+, estesa ai pulsanti configurati come **comandi di
 gruppo** (o area/generale), che oggi generano eventi utilizzabili solo scrivendo YAML.
@@ -143,6 +179,9 @@ aggiunge superficie di codice da mantenere.
   oraria manuale.
 - **Gestione carichi (WHO=3)** — supporto esplorativo: intercettare gli eventi e aiutare la
   mappatura degli attuatori.
+- **Programmi di termoregolazione come entità `select`** — esporre i programmi settimanali
+  caldo/freddo della centrale di termoregolazione come tendine selezionabili in HA
+  (affine a P1a, ma richiede hardware di termoregolazione in impianto).
 
 ---
 
