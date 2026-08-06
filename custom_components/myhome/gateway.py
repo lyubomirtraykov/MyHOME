@@ -53,6 +53,7 @@ from .const import (
     SCENARIO_CONTROL_NAMES,
     scenario_control_id,
 )
+from .compat import first_scalar
 
 # Max time a command worker waits for the event session to come up before it
 # gives up (the OWNd connect() already retries internally with backoff).
@@ -74,16 +75,20 @@ class MyHOMEGatewayHandler:
             "address": config_entry.data[CONF_HOST],
             "port": config_entry.data[CONF_PORT],
             "password": config_entry.data[CONF_PASSWORD],
-            "ssdp_location": config_entry.data[CONF_SSDP_LOCATION],
-            "ssdp_st": config_entry.data[CONF_SSDP_ST],
-            "deviceType": config_entry.data[CONF_DEVICE_TYPE],
-            "friendlyName": config_entry.data[CONF_FRIENDLY_NAME],
-            "manufacturer": config_entry.data[CONF_MANUFACTURER],
-            "manufacturerURL": config_entry.data[CONF_MANUFACTURER_URL],
-            "modelName": config_entry.data[CONF_NAME],
-            "modelNumber": config_entry.data[CONF_FIRMWARE],
+            "ssdp_location": first_scalar(config_entry.data[CONF_SSDP_LOCATION]),
+            "ssdp_st": first_scalar(config_entry.data[CONF_SSDP_ST]),
+            "deviceType": first_scalar(config_entry.data[CONF_DEVICE_TYPE]),
+            "friendlyName": first_scalar(config_entry.data[CONF_FRIENDLY_NAME]),
+            "manufacturer": first_scalar(
+                config_entry.data[CONF_MANUFACTURER], "BTicino S.p.A."
+            ),
+            "manufacturerURL": first_scalar(
+                config_entry.data[CONF_MANUFACTURER_URL]
+            ),
+            "modelName": first_scalar(config_entry.data[CONF_NAME]),
+            "modelNumber": first_scalar(config_entry.data[CONF_FIRMWARE]),
             "serialNumber": config_entry.data[CONF_MAC],
-            "UDN": config_entry.data[CONF_UDN],
+            "UDN": first_scalar(config_entry.data[CONF_UDN]),
         }
         self.hass = hass
         self.config_entry = config_entry
@@ -401,6 +406,9 @@ class MyHOMEGatewayHandler:
                             where,
                         )
                         await self.send_status_request(OWNHeatingCommand.status(where))
+                        await self.send_status_request(
+                            OWNHeatingCommand.valves_status(where)
+                        )
                     elif isinstance(message, OWNCENPlusEvent):
                         event = None
                         if message.is_short_pressed:
@@ -608,4 +616,3 @@ class MyHOMEGatewayHandler:
     async def _delayed_status_request(self, command):
         await asyncio.sleep(0.1)
         await self.send_status_request(command)
-

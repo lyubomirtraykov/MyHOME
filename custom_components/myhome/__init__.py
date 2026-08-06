@@ -7,7 +7,7 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.sensor import DOMAIN as SENSOR
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_MAC
+from homeassistant.const import CONF_FRIENDLY_NAME, CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
@@ -26,20 +26,58 @@ from .const import (
     ATTR_MESSAGE,
     CEN_KIND,
     CEN_PLUS_KIND,
+    CONF_DEVICE_TYPE,
     CONF_DEVICE_CLASS,
     CONF_ENTITIES,
     CONF_FILE_PATH,
+    CONF_FIRMWARE,
     CONF_GENERATE_EVENTS,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
     CONF_PLATFORMS,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_UDN,
     CONF_WORKER_COUNT,
     DOMAIN,
     LOGGER,
 )
+from .compat import first_scalar
 from .gateway import MyHOMEGatewayHandler
 from .models import MyHomeConfigEntry, MyHomeRuntimeData
 from .validate import config_schema, format_mac
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+_LEGACY_DISCOVERY_FIELDS = (
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_DEVICE_TYPE,
+    CONF_FRIENDLY_NAME,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
+    CONF_NAME,
+    CONF_FIRMWARE,
+    CONF_UDN,
+)
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: MyHomeConfigEntry
+) -> bool:
+    """Migrate config entries created before scalar discovery values were fixed."""
+    if entry.version >= 2:
+        return True
+
+    data = dict(entry.data)
+    for field in _LEGACY_DISCOVERY_FIELDS:
+        if field in data:
+            default = "BTicino S.p.A." if field == CONF_MANUFACTURER else None
+            data[field] = first_scalar(data[field], default)
+
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
+    LOGGER.info("Migrated MyHOME config entry %s to version 2", entry.entry_id)
+    return True
 
 
 def _is_scenario_control(device_entry: dr.DeviceEntry) -> bool:

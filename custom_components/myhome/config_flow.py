@@ -73,7 +73,7 @@ class MACAddress:
 class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     """Handle a MyHome config flow."""
 
-    VERSION = 1
+    VERSION = 2
 
     @staticmethod
     @callback
