@@ -294,12 +294,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyHomeConfigEntry) -> bo
         sw_version=gateway_handler.firmware,
     )
 
-    await hass.config_entries.async_forward_entry_setups(
-        entry, list(_platforms_config.keys())
-    )
-
     # Long-running workers as tracked background tasks tied to the config entry:
     # HA cancels them automatically on unload/reload (no lingering tasks).
+    # Start consumers before forwarding platforms: entity async_update methods
+    # enqueue their initial status requests during setup, and a bounded queue
+    # must always have an active consumer to avoid deadlocking large installs.
     gateway_handler.listening_worker = entry.async_create_background_task(
         hass,
         gateway_handler.listening_loop(),
@@ -313,6 +312,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyHomeConfigEntry) -> bo
                 name=f"myhome-{entry.data[CONF_MAC]}-sender-{i}",
             )
         )
+
+    await hass.config_entries.async_forward_entry_setups(
+        entry, list(_platforms_config.keys())
+    )
 
     # Pruning lose entities and devices from the registry
     entity_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
