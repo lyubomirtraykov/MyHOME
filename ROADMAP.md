@@ -45,6 +45,28 @@ nel ciclo beta successivo.
 
 ---
 
+## 🧪 Pianificato per 0.9.88-beta / OWNd 1.0.12-beta
+
+La prima beta è una baseline versionata, operativamente identica alla stabile 0.9.87. Il
+ciclo di hardening MyHOME sarà suddiviso in modifiche piccole e verificabili:
+
+- inizializzare il gateway come non disponibile e dichiararlo disponibile solo dopo una
+  sessione eventi realmente stabilita, senza impostare il segnale di readiness quando
+  `connect()` fallisce;
+- rendere la coda comandi limitata e il relativo ciclo worker sicuro anche in caso di
+  eccezione, definendo una backpressure esplicita senza perdere comandi in silenzio;
+- instradare tramite dispatcher anche gli eventi generali, di area e di gruppo verso le
+  entità aggregate configurate, mantenendo in parallelo gli eventi sul bus di Home
+  Assistant;
+- aggiungere test di regressione per avvio, fallimento della prima connessione,
+  riconnessione, saturazione della coda e routing degli eventi aggregati.
+
+I fix OWNd relativi ad autenticazione, timeout complessivi e cleanup delle sessioni sono
+descritti nella roadmap della libreria e verranno validati prima di aggiornare la beta
+MyHOME che li utilizza.
+
+---
+
 ## ✅ Fatto in 0.9.86 — Device trigger per CEN / CEN+ (validati sul campo)
 
 I pulsanti a muro CEN/CEN+ sono ora usabili **dall'interfaccia automazioni**, senza YAML:
