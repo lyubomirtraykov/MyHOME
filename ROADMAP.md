@@ -1,6 +1,7 @@
 # MyHOME — Roadmap
 
-Stato al 2026-07-29 · versione corrente **0.9.86** (OWNd **v1.0.10**)
+Stato al 2026-08-07 · stabile **0.9.86** (OWNd **v1.0.10**) · in validazione
+**0.9.87-beta** (OWNd **v1.0.11-beta**)
 
 ---
 
@@ -19,6 +20,28 @@ Ciclo di hardening e riprogettazione completato e validato sul campo:
 
 Validato con 5 giorni di soak su impianto reale (MH201): zero errori, 113 riconnessioni di
 routine tutte silenziose, recupero automatico anche da saturazione degli slot di sessione.
+
+---
+
+## 🧪 In validazione — 0.9.87-beta / OWNd 1.0.11-beta
+
+Questa beta aggiunge il supporto ai frame di termoregolazione osservati su un impianto
+BTicino 3550 / MyHomeServer1 e la relativa migrazione dei dati di configurazione:
+
+- dimensioni 12 e 14 mantenute indipendenti (stato locale/effective e stato centrale);
+- dimensione 13 esposta anche come valore grezzo, incluso lo stato `local_override`;
+- dimensione 19 richiesta esplicitamente durante l'aggiornamento completo;
+- migrazione compatibile del produttore della centrale dalla precedente lista al valore
+  scalare atteso dal modello dati corrente.
+
+La copertura automatica comprende sei test in OWNd e sei test in MyHOME; Ruff, mypy e tutti
+i test risultano puliti localmente. Prima della promozione a OWNd v1.0.11 / MyHOME 0.9.87
+restano la validazione sul gateway 3550 che ha prodotto i frame e un breve soak di regressione
+sull'impianto MH201.
+
+Il rafforzamento *fail-closed* della negoziazione autenticata resta volutamente fuori da
+questa beta: interessa direttamente l'accesso al gateway e sarà sviluppato e verificato in
+una beta separata.
 
 ---
 
@@ -158,11 +181,13 @@ Validazione automatica a ogni push/PR (più un check giornaliero programmato):
    `actions/checkout`.
 2. **HACS validate** (`.github/workflows/validate.yml`) — già presente, verifica la
    conformità ai requisiti HACS. Stesso aggiornamento.
-3. **Qualità del codice** (`.github/workflows/lint.yml`, nuovo) — esegue `ruff` e `mypy`
-   sulla stessa configurazione di `pyproject.toml` usata localmente. `mypy` installa
-   `homeassistant` (per risolvere gli import) e OWNd **dall'esatto tag pinnato nel
-   manifest** (letto dinamicamente, mai hardcoded: non si disallinea quando bumpiamo
-   OWNd).
+3. **Qualità del codice** (`.github/workflows/lint.yml`) — esegue `ruff`, `mypy` e i test
+   unitari sulla stessa configurazione di `pyproject.toml` usata localmente. `mypy` e i test
+   installano `homeassistant` (per risolvere gli import) e OWNd **dall'esatto tag pinnato
+   nel manifest** (letto dinamicamente, mai hardcoded: non si disallinea quando bumpiamo
+   OWNd). Tutti i workflow possono essere rilanciati manualmente dalla pagina Actions.
+4. **CI OWNd** (`OWNd/.github/workflows/ci.yml`) — esegue `ruff`, `mypy` e i test della
+   libreria con Python 3.14 a ogni push e pull request.
 
 ---
 

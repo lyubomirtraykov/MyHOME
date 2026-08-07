@@ -3,6 +3,10 @@ name: Lint
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   ruff:
@@ -15,7 +19,7 @@ jobs:
       - name: Install ruff
         run: pip install ruff
       - name: Run ruff
-        run: ruff check custom_components/
+        run: ruff check custom_components/ tests/
 
   mypy:
     runs-on: "ubuntu-latest"
@@ -40,3 +44,5 @@ jobs:
           pip install "${{ steps.ownd.outputs.requirement }}"
       - name: Run mypy
         run: mypy --explicit-package-bases custom_components/myhome/
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
