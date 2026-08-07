@@ -1,7 +1,7 @@
 # MyHOME — Roadmap
 
-Stato al 2026-08-07 · stabile **0.9.86** (OWNd **v1.0.10**) · in validazione
-**0.9.87-beta** (OWNd **v1.0.11-beta**)
+Stato al 2026-08-07 · stabile **0.9.87** (OWNd **v1.0.11**) · prossimo ciclo
+**0.9.88-beta** (OWNd **v1.0.12-beta**)
 
 ---
 
@@ -23,9 +23,9 @@ routine tutte silenziose, recupero automatico anche da saturazione degli slot di
 
 ---
 
-## 🧪 In validazione — 0.9.87-beta / OWNd 1.0.11-beta
+## ✅ Fatto in 0.9.87 / OWNd 1.0.11
 
-Questa beta aggiunge il supporto ai frame di termoregolazione osservati su un impianto
+Questa versione aggiunge il supporto ai frame di termoregolazione osservati su un impianto
 BTicino 3550 / MyHomeServer1 e la relativa migrazione dei dati di configurazione:
 
 - dimensioni 12 e 14 mantenute indipendenti (stato locale/effective e stato centrale);
@@ -35,13 +35,13 @@ BTicino 3550 / MyHomeServer1 e la relativa migrazione dei dati di configurazione
   scalare atteso dal modello dati corrente.
 
 La copertura automatica comprende sei test in OWNd e sei test in MyHOME; Ruff, mypy e tutti
-i test risultano puliti localmente. Prima della promozione a OWNd v1.0.11 / MyHOME 0.9.87
-restano la validazione sul gateway 3550 che ha prodotto i frame e un breve soak di regressione
-sull'impianto MH201.
+i test risultano puliti. La versione è stata validata su hardware reale con MyHomeServer1,
+12 zone di termoregolazione, 49 luci e 3 misuratori F520, oltre al soak di regressione
+sull'impianto MH201 di riferimento.
 
 Il rafforzamento *fail-closed* della negoziazione autenticata resta volutamente fuori da
-questa beta: interessa direttamente l'accesso al gateway e sarà sviluppato e verificato in
-una beta separata.
+questa versione: interessa direttamente l'accesso al gateway e sarà sviluppato e verificato
+nel ciclo beta successivo.
 
 ---
 
