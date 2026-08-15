@@ -1,7 +1,6 @@
 # MyHOME — Roadmap
 
-Stato al 2026-08-07 · stabile **0.9.87** (OWNd **v1.0.11**) · prossimo ciclo
-**0.9.88-beta.2** (OWNd **v1.0.12-beta.3**)
+Stato al 2026-08-15 · stabile **0.9.88** (OWNd **v1.0.12**)
 
 ---
 
@@ -45,7 +44,7 @@ nel ciclo beta successivo.
 
 ---
 
-## 🧪 In beta 0.9.88 / OWNd 1.0.12
+## ✅ Fatto in 0.9.88 / OWNd 1.0.12
 
 La prima beta era una baseline versionata, operativamente identica alla stabile 0.9.87.
 Le beta successive introducono in blocchi separati e verificabili:
@@ -62,10 +61,12 @@ Le beta successive introducono in blocchi separati e verificabili:
   riconnessione, saturazione della coda e routing degli eventi aggregati.
 
 I fix OWNd relativi ad autenticazione, timeout complessivi, cleanup delle sessioni e casi
-limite energia sono inclusi nella dipendenza `v1.0.12-beta.3`. MyHOME 0.9.88-beta.2 include
-i test di regressione per primo collegamento fallito, riconnessione, saturazione della coda,
-bilanciamento del worker e routing aggregato; il passo successivo è la validazione su
-hardware reale prima della promozione a stabile.
+limite energia sono inclusi nella dipendenza stabile `v1.0.12`. MyHOME 0.9.88 include i
+test di regressione per primo collegamento fallito, riconnessione, saturazione della coda,
+bilanciamento del worker e routing aggregato.
+
+La versione è stata validata per una settimana su hardware reale con gateway MH201,
+senza regressioni operative, prima della promozione a stabile.
 
 ---
 
