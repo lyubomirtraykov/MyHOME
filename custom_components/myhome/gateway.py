@@ -53,7 +53,7 @@ from .const import (
     SCENARIO_CONTROL_NAMES,
     scenario_control_id,
 )
-from .compat import first_scalar
+from .compat import device_via_kwargs, first_scalar
 
 # Max time a command worker waits for the event session to come up before it
 # gives up (the OWNd connect() already retries internally with backoff).
@@ -108,6 +108,7 @@ class MyHOMEGatewayHandler:
         self._available = False
         self._unavailable_timer = None
         self._event_session_ready = asyncio.Event()
+        self.device_registry_id: str | None = None
         self.listening_worker: asyncio.Task | None = None
         self.sending_workers: list[asyncio.Task] = []
         self.send_buffer: asyncio.Queue[dict] = asyncio.Queue(
@@ -174,6 +175,14 @@ class MyHOMEGatewayHandler:
         key = (kind, object_id)
         if key in self._known_scenario_controls:
             return
+        if self.device_registry_id is None:
+            LOGGER.error(
+                "%s Cannot register %s control %s before the gateway device.",
+                self.log_id,
+                SCENARIO_CONTROL_NAMES[kind],
+                object_id,
+            )
+            return
         self._known_scenario_controls.add(key)
         dr.async_get(self.hass).async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
@@ -181,7 +190,9 @@ class MyHOMEGatewayHandler:
             name=f"{SCENARIO_CONTROL_NAMES[kind]} {object_id}",
             manufacturer=self.manufacturer,
             model=SCENARIO_CONTROL_MODELS[kind],
-            via_device=(DOMAIN, self.unique_id),
+            **device_via_kwargs(
+                self.device_registry_id, (DOMAIN, self.unique_id)
+            ),
         )
         LOGGER.info(
             "%s Registered %s control %s (press its buttons to use them as "

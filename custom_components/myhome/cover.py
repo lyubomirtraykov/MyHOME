@@ -52,10 +52,10 @@ async def async_setup_entry(
             where=_configured_covers[_cover][CONF_WHERE],
             interface=_configured_covers[_cover].get(CONF_BUS_INTERFACE, None),
             name=_configured_covers[_cover][CONF_NAME],
-            entity_name=_configured_covers[_cover][CONF_ENTITY_NAME],
+            entity_name=_configured_covers[_cover].get(CONF_ENTITY_NAME),
             advanced=_configured_covers[_cover][CONF_ADVANCED_SHUTTER],
             manufacturer=_configured_covers[_cover][CONF_MANUFACTURER],
-            model=_configured_covers[_cover][CONF_DEVICE_MODEL],
+            model=_configured_covers[_cover].get(CONF_DEVICE_MODEL),
             gateway=config_entry.runtime_data.gateway_handler,
         )
         _covers.append(_entity)

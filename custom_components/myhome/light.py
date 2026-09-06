@@ -56,14 +56,14 @@ async def async_setup_entry(
             device_id=_light,
             who=_configured_lights[_light][CONF_WHO],
             where=_configured_lights[_light][CONF_WHERE],
-            icon=_configured_lights[_light][CONF_ICON],
-            icon_on=_configured_lights[_light][CONF_ICON_ON],
+            icon=_configured_lights[_light].get(CONF_ICON),
+            icon_on=_configured_lights[_light].get(CONF_ICON_ON),
             interface=_configured_lights[_light].get(CONF_BUS_INTERFACE, None),
             name=_configured_lights[_light][CONF_NAME],
-            entity_name=_configured_lights[_light][CONF_ENTITY_NAME],
+            entity_name=_configured_lights[_light].get(CONF_ENTITY_NAME),
             dimmable=_configured_lights[_light][CONF_DIMMABLE],
             manufacturer=_configured_lights[_light][CONF_MANUFACTURER],
-            model=_configured_lights[_light][CONF_DEVICE_MODEL],
+            model=_configured_lights[_light].get(CONF_DEVICE_MODEL),
             gateway=config_entry.runtime_data.gateway_handler,
         )
         _lights.append(_entity)

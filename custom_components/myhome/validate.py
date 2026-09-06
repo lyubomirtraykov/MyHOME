@@ -165,9 +165,19 @@ class BusInterface:
         return f"{type(self).__name__}(String, msg={self.msg!r})"
 
 
-class MyHomeConfigSchema(Schema):
+class MyHomeConfigSchema:
+    """Validate and normalize the complete MyHOME configuration.
+
+    This intentionally wraps ``Schema`` instead of subclassing it.  Starting
+    with Home Assistant 2026.9, Probatio compiles nested ``Schema`` instances
+    directly and therefore bypasses overridden ``Schema.__call__`` methods.
+    """
+
+    def __init__(self, schema):
+        self._schema = Schema(schema)
+
     def __call__(self, data):
-        data = super().__call__(data)
+        data = self._schema(data)
         _rekeyed_data: dict = {}
         for gateway in data:
             _rekeyed_data[data[gateway][CONF_MAC]] = {}
@@ -198,9 +208,14 @@ class MyHomeConfigSchema(Schema):
         return _rekeyed_data
 
 
-class MyHomeDeviceSchema(Schema):
+class MyHomeDeviceSchema:
+    """Validate and normalize a platform's configured devices."""
+
+    def __init__(self, schema):
+        self._schema = Schema(schema)
+
     def __call__(self, data):
-        data = super().__call__(data)
+        data = self._schema(data)
         _rekeyed_data: dict = {}
 
         for device in data:
@@ -231,9 +246,14 @@ class MyHomeDeviceSchema(Schema):
         return _rekeyed_data
 
 
-class MyHomeSensorSchema(Schema):
+class MyHomeSensorSchema:
+    """Validate and normalize configured sensors."""
+
+    def __init__(self, schema):
+        self._schema = Schema(schema)
+
     def __call__(self, data):
-        data = super().__call__(data)
+        data = self._schema(data)
         _rekeyed_data: dict = {}
 
         for device in data:

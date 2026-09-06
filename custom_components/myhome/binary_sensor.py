@@ -62,11 +62,11 @@ async def async_setup_entry(
                 who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
                 where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
                 name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
+                entity_name=_configured_binary_sensors[_binary_sensor].get(CONF_ENTITY_NAME),
                 inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
                 device_class=_device_class,
                 manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                model=_configured_binary_sensors[_binary_sensor].get(CONF_DEVICE_MODEL),
                 gateway=config_entry.runtime_data.gateway_handler,
             )
             _binary_sensors.append(_entity)
@@ -77,11 +77,11 @@ async def async_setup_entry(
                 who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
                 where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
                 name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
+                entity_name=_configured_binary_sensors[_binary_sensor].get(CONF_ENTITY_NAME),
                 inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
                 device_class=_device_class,
                 manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                model=_configured_binary_sensors[_binary_sensor].get(CONF_DEVICE_MODEL),
                 gateway=config_entry.runtime_data.gateway_handler,
             )
             _binary_sensors.append(_entity)
@@ -92,11 +92,11 @@ async def async_setup_entry(
                 who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
                 where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
                 name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
+                entity_name=_configured_binary_sensors[_binary_sensor].get(CONF_ENTITY_NAME),
                 inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
                 device_class=_device_class,
                 manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                model=_configured_binary_sensors[_binary_sensor].get(CONF_DEVICE_MODEL),
                 gateway=config_entry.runtime_data.gateway_handler,
             )
             _binary_sensors.append(_entity)

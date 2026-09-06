@@ -49,14 +49,14 @@ async def async_setup_entry(
             device_id=_switch,
             who=_configured_switches[_switch][CONF_WHO],
             where=_configured_switches[_switch][CONF_WHERE],
-            icon=_configured_switches[_switch][CONF_ICON],
-            icon_on=_configured_switches[_switch][CONF_ICON_ON],
+            icon=_configured_switches[_switch].get(CONF_ICON),
+            icon_on=_configured_switches[_switch].get(CONF_ICON_ON),
             interface=_configured_switches[_switch].get(CONF_BUS_INTERFACE, None),
             name=_configured_switches[_switch][CONF_NAME],
-            entity_name=_configured_switches[_switch][CONF_ENTITY_NAME],
+            entity_name=_configured_switches[_switch].get(CONF_ENTITY_NAME),
             device_class=_configured_switches[_switch][CONF_DEVICE_CLASS],
             manufacturer=_configured_switches[_switch][CONF_MANUFACTURER],
-            model=_configured_switches[_switch][CONF_DEVICE_MODEL],
+            model=_configured_switches[_switch].get(CONF_DEVICE_MODEL),
             gateway=config_entry.runtime_data.gateway_handler,
         )
         _switches.append(_entity)

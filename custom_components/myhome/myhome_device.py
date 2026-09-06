@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from .gateway import MyHOMEGatewayHandler
 
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from OWNd.message import OWNMessage
 
+from .compat import device_via_kwargs
 from .const import DOMAIN
 
 
@@ -42,13 +44,19 @@ class MyHOMEEntity(Entity):
         self._attr_entity_registry_enabled_default = True
         self._attr_should_poll = False
 
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{gateway.mac}-{self._device_id}")},
-            "name": name,
-            "manufacturer": self._manufacturer,
-            "model": self._model,
-            "via_device": (DOMAIN, self._gateway_handler.unique_id),
-        }
+        self._attr_device_info = cast(
+            dr.DeviceInfo,
+            {
+                "identifiers": {(DOMAIN, f"{gateway.mac}-{self._device_id}")},
+                "name": name,
+                "manufacturer": self._manufacturer,
+                "model": self._model,
+                **device_via_kwargs(
+                    self._gateway_handler.device_registry_id,
+                    (DOMAIN, self._gateway_handler.unique_id),
+                ),
+            },
+        )
 
     @property
     def available(self) -> bool:

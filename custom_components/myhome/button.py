@@ -52,7 +52,7 @@ async def async_setup_entry(
             ),
             name=_configured_buttons[_button][CONF_NAME],
             manufacturer=_configured_buttons[_button][CONF_MANUFACTURER],
-            model=_configured_buttons[_button][CONF_DEVICE_MODEL],
+            model=_configured_buttons[_button].get(CONF_DEVICE_MODEL),
             gateway=config_entry.runtime_data.gateway_handler,
         )
         _buttons.append(_disable_button)
@@ -68,7 +68,7 @@ async def async_setup_entry(
             ),
             name=_configured_buttons[_button][CONF_NAME],
             manufacturer=_configured_buttons[_button][CONF_MANUFACTURER],
-            model=_configured_buttons[_button][CONF_DEVICE_MODEL],
+            model=_configured_buttons[_button].get(CONF_DEVICE_MODEL),
             gateway=config_entry.runtime_data.gateway_handler,
         )
         _buttons.append(_enable_button)

@@ -88,7 +88,7 @@ async def async_setup_entry(
                 manufacturer=_configured_climate_devices[_climate_device][
                     CONF_MANUFACTURER
                 ],
-                model=_configured_climate_devices[_climate_device][CONF_DEVICE_MODEL],
+                model=_configured_climate_devices[_climate_device].get(CONF_DEVICE_MODEL),
                 gateway=config_entry.runtime_data.gateway_handler,
             )
         )

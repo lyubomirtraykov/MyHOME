@@ -120,7 +120,7 @@ async def async_setup_entry(
                         name=_configured_sensors[_sensor][CONF_NAME],
                         device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
                         manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                        model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                        model=_configured_sensors[_sensor].get(CONF_DEVICE_MODEL),
                         gateway=config_entry.runtime_data.gateway_handler,
                     )
                 )
@@ -137,7 +137,7 @@ async def async_setup_entry(
                         entity_specific_id=entity_specific_id,
                         device_class=SensorDeviceClass.ENERGY,
                         manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                        model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                        model=_configured_sensors[_sensor].get(CONF_DEVICE_MODEL),
                         gateway=config_entry.runtime_data.gateway_handler,
                     )
                 )
@@ -155,7 +155,7 @@ async def async_setup_entry(
                     name=_configured_sensors[_sensor][CONF_NAME],
                     device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
                     manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                    model=_configured_sensors[_sensor].get(CONF_DEVICE_MODEL),
                     gateway=config_entry.runtime_data.gateway_handler,
                 )
             )
@@ -173,7 +173,7 @@ async def async_setup_entry(
                     name=_configured_sensors[_sensor][CONF_NAME],
                     device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
                     manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                    model=_configured_sensors[_sensor].get(CONF_DEVICE_MODEL),
                     gateway=config_entry.runtime_data.gateway_handler,
                 )
             )
