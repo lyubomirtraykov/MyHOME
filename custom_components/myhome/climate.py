@@ -177,6 +177,9 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
         await self._gateway_handler.send_status_request(
             OWNHeatingCommand.valves_status(self._where)
         )
+        await self._gateway_handler.send_status_request(
+            OWNHeatingCommand.get_humidity(self._where)
+        )
 
     @property
     def target_temperature(self) -> float | None:
