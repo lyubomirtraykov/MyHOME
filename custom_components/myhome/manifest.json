@@ -2,7 +2,7 @@
   "domain": "myhome",
   "name": "MyHOME",
   "codeowners": [
-    "@fedem95"
+    "@lyubomirtraykov"
   ],
   "config_flow": true,
   "documentation": "https://github.com/lyubomirtraykov/MyHOME",
